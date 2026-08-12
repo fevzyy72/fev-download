@@ -1,0 +1,26 @@
+# Python-Umgebung und Zwischenstaende
+.venv/
+__pycache__/
+*.pyc
+
+# Mitgelieferte Fremdprogramme - holt setup.ps1, gehoert nicht ins Verzeichnis
+bin/
+
+# Bauartefakte. dist/ enthaelt die fertige Setup.exe (rund 150 MB) - die
+# gehoert an ein Release, nicht in die Versionsverwaltung.
+build/
+dist/
+*.manifest
+
+# Erzeugtes und Persoenliches
+downloads/
+*.log
+install.json
+job.json
+result.json
+thumbs/
+
+# Editor und Betriebssystem
+.vscode/
+Thumbs.db
+desktop.ini
