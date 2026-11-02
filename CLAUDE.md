@@ -34,6 +34,17 @@ Installer-Datei bzw. über die App-Aktualisierung.
   (`icons.draw_logo` / `draw_logo_small`, `assets/fevdl.ico` via `tools/make_icon.py`); von Codex entworfen.
 - `design/` steht in `.gitignore` (nur lokal, enthält Beispielpfade).
 - Lizenz-/Quellenprüfung (ffmpeg GPL, Qt, curl) ist **nicht vollständig** – siehe `SICHERHEIT.md`.
+- **1.2.0 ist veröffentlicht** (GitHub-Release `v1.2.0`, 112 MB) und lief bei einem Freund und
+  in Resolve beim Besitzer. Leerlauf: ~107 MB RAM, 0 % CPU; installiert ~354 MB.
+- **Defender-Fehlalarm:** `Trojan:Win32/Bearfoos.A!ml` (ML-Schätzung) nimmt `FevDownload.exe`
+  in Quarantäne – auch Startmenü-Symbol und Deinstallationseintrag; Resolve meldet dann
+  „Programm nicht zu finden“ (`launcher.log`). Abhilfe: Ordner `%LOCALAPPDATA%\Programs\FevDownload`
+  als Ausschluss eintragen und in *Schutzverlauf → Auf Gerät zulassen* (oder Installer erneut).
+  Nicht den Scanner abschalten lassen. Die Ursache ist nicht belegt (unsigniert, PyInstaller-Aufbau,
+  yt-dlp/curl_cffi, Updater, Start über `fuscript.exe`). Offen: bei Microsoft als Fehlalarm melden,
+  Probe mit leerem PyInstaller-Programm, eigener Bootloader, Signatur.
+- Aufgeräumt: `build/` und `dist/FevDownload` sind reine Zwischenstände (neu erzeugbar),
+  `downloads/` waren Testreste. In `dist/` bleibt nur `FevDownloadSetup.exe` + `bau.json`.
 
 **Diese Runde erledigt** (Details je in Abschnitt 5/6):
 - YouTube-Vorschau repariert (`download.PREVIEW_FORMAT`), neueres yt-dlp gewinnt gegen
