@@ -88,7 +88,14 @@ def read_json(path: Path) -> Optional[dict[str, Any]]:
 
 def read_job(path: Path) -> Optional[Job]:
     data = read_json(path)
-    return Job.from_dict(data) if data else None
+    if not data or not isinstance(data.get("job_id"), str) or not data["job_id"]:
+        return None
+    if not isinstance(data.get("output_dir", ""), str):
+        return None
+    try:
+        return Job.from_dict(data)
+    except (TypeError, ValueError):
+        return None
 
 
 def write_job(path: Path, job: Job) -> None:

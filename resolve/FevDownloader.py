@@ -131,7 +131,8 @@ def find_installation():
         )
 
     project_root = data.get("project_root") or ""
-    if not os.path.isdir(project_root):
+    if (not isinstance(project_root, str) or not os.path.isabs(project_root)
+            or "\x00" in project_root or not os.path.isdir(project_root)):
         raise RuntimeError(
             "Der eingetragene Programmordner existiert nicht:\n  {}\n"
             "Bitte Fev Download neu installieren.".format(project_root)
@@ -176,6 +177,8 @@ def import_files(media_pool, file_paths):
     """
     imported = []
     for file_path in file_paths:
+        if not isinstance(file_path, str) or not os.path.isabs(file_path) or "\x00" in file_path:
+            continue
         if not os.path.isfile(file_path):
             log("Datei nicht gefunden, wird uebersprungen: {}".format(file_path))
             continue
@@ -197,6 +200,17 @@ def import_files(media_pool, file_paths):
                 )
             )
     return imported
+
+
+def pending_files(result, job_id, imported):
+    """Nur vollstaendige Pfadlisten fuer die aktuelle Sitzung annehmen."""
+    if not result or result.get("job_id") != job_id:
+        return []
+    files = result.get("files")
+    if not isinstance(files, list):
+        return []
+    return [path for path in files if isinstance(path, str) and "\x00" not in path
+            and os.path.isabs(path) and path not in imported]
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +280,7 @@ def main():
         result = read_json(RESULT_FILE)
 
         if result and result.get("job_id") == job_id:
-            pending = [
-                path for path in (result.get("files") or []) if path not in imported
-            ]
+            pending = pending_files(result, job_id, imported)
             if pending:
                 for path in import_files(media_pool, pending):
                     imported.add(path)
@@ -294,7 +306,7 @@ def main():
     # noch fertig wurde, waere sonst verloren.
     result = read_json(RESULT_FILE)
     if result and result.get("job_id") == job_id:
-        pending = [path for path in (result.get("files") or []) if path not in imported]
+        pending = pending_files(result, job_id, imported)
         if pending:
             for path in import_files(media_pool, pending):
                 imported.add(path)

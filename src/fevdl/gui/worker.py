@@ -21,6 +21,7 @@ from ..core.errors import CancelledError, FevError
 from ..core.models import DownloadRequest, Progress
 from ..core.probe import probe
 from ..core.thumbs import ensure_thumbnail
+from ..core.urls import web_url
 from ..core.update import auto_update_ytdlp
 from ..core.waveform import extract_peaks
 
@@ -53,18 +54,26 @@ class ThumbnailWorker(QThread):
 
     loaded = Signal(bytes)
 
+    # Hoechstgroesse eines Vorschaubilds. Die Adresse stammt aus den Metadaten
+    # einer fremden Seite; ohne Grenze liesse sich der Speicher fuellen.
+    MAX_BYTES = 10 * 1024 * 1024
+
     def __init__(self, url: str, parent=None) -> None:
         super().__init__(parent)
         self._url = url
 
     def run(self) -> None:
         try:
+            # Nur http/https - dieselbe Grenze wie beim Link (core/urls.py).
+            url = web_url(self._url)
             request = urllib.request.Request(
-                self._url,
+                url,
                 headers={"User-Agent": "Mozilla/5.0"},
             )
             with urllib.request.urlopen(request, timeout=15) as response:
-                self.loaded.emit(response.read())
+                data = response.read(self.MAX_BYTES + 1)
+            if len(data) <= self.MAX_BYTES:
+                self.loaded.emit(data)
         except Exception:
             # Ein fehlendes Vorschaubild ist kein Grund, den Nutzer zu stoeren.
             pass
@@ -209,6 +218,7 @@ class DownloadWorker(QThread):
 
     progressed = Signal(object)  # Progress
     fileReady = Signal(object)   # Path - nach jedem fertigen Ausschnitt
+    partReady = Signal(int, object)  # Nummer des Auftrags (ab 0), Path
     succeeded = Signal(object)   # Path - der letzte, wenn alles durch ist
     failed = Signal(str)
     cancelled = Signal()
@@ -285,6 +295,7 @@ class DownloadWorker(QThread):
             self._eta[index] = 0
         # Sofort melden, nicht erst am Ende: So wandert jeder Ausschnitt in den
         # Media Pool, sobald er da ist.
+        self.partReady.emit(index, result)
         self.fileReady.emit(result)
         return result
 

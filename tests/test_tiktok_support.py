@@ -1,5 +1,6 @@
 """Regressionspruefungen fuer TikTok-Metadaten und Aktualisierungen, ohne Netz."""
 
+import hashlib
 import unittest
 from unittest.mock import patch
 
@@ -57,7 +58,7 @@ class UpdateTests(unittest.TestCase):
     def test_identische_fassung_mit_fuehrenden_nullen(self):
         with (
             patch("fevdl.core.update.current_version", return_value="2026.08.19"),
-            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "unused")),
+            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "unused", "00" * 32)),
             patch("fevdl.core.update._fetch") as fetch,
         ):
             result = update_ytdlp()
@@ -67,7 +68,7 @@ class UpdateTests(unittest.TestCase):
     def test_kein_downgrade(self):
         with (
             patch("fevdl.core.update.current_version", return_value="2026.09.30"),
-            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "unused")),
+            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "unused", "00" * 32)),
             patch("fevdl.core.update._fetch") as fetch,
         ):
             self.assertFalse(update_ytdlp().changed)
@@ -76,7 +77,7 @@ class UpdateTests(unittest.TestCase):
     def test_neuere_fassung_wird_installiert(self):
         with (
             patch("fevdl.core.update.current_version", return_value="2026.07.04"),
-            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "wheel")),
+            patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "wheel", hashlib.sha256(b"wheel").hexdigest())),
             patch("fevdl.core.update._fetch", return_value=b"wheel") as fetch,
             patch("fevdl.core.update._extract_wheel") as extract,
             # Sonst hinge der Test davon ab, was auf diesem Rechner schon nachgeladen ist.

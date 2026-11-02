@@ -8,6 +8,70 @@ Sprache: Der gesamte Code, alle Kommentare und alle Texte für Nutzer sind auf
 Deutsch, ohne Umlaute in Quelltextdateien (`ae`, `oe`, `ue`, `ss`). Markdown-
 Dateien dürfen Umlaute enthalten. Bitte beibehalten.
 
+**Nicht alles lesen.** Die Datei ist lang (Fallstricke in Abschnitt 5 sind je Thema
+gebündelt): erst Abschnitt 0, dann nur die Stelle, die zur Aufgabe passt.
+
+---
+
+## 0. Aktueller Stand (Stand: 2. Nov. 2026) — zuerst lesen
+
+**Veröffentlicht: Fassung 1.1.0**, öffentlich auf GitHub: `fevzyy72/fev-download`
+(Branch `main`, Release `v1.1.0` mit `FevDownloadSetup.exe`). Beim Entwicklungsrechner
+ist sie installiert; `install.json` zeigt auf die installierte `.exe` (nicht auf den
+Quelltext – siehe Abschnitt 3).
+
+**Diese Runde erledigt** (Details je in Abschnitt 5/6):
+- YouTube-Vorschau repariert (`download.PREVIEW_FORMAT`), neueres yt-dlp gewinnt gegen
+  einen veralteten Nachlade-Ordner (`paths.bundled_ytdlp_version`).
+- Pakete aktuell: yt-dlp 2026.10.26, curl_cffi 0.17, PySide6 6.12, PyInstaller 6.22.3.
+- Selbst-Aktualisierung: yt-dlp still beim Start, neue App-Fassungen über GitHub-Releases
+  (`core/appupdate.py`, Abschnitt 5 „Aktualisierung der App“).
+- `FevDownload.exe --selbsttest` (Abschnitt 5 „Verpacken“), `release.ps1`, `LIZENZEN.txt`.
+- Tests: damals 17 ohne Netz, 6 mit `-MitNetz`, alle grün.
+
+**Redesign „D – Sammelmappe“ umgesetzt (2. Nov. 2026), nicht committet, nicht veröffentlicht.**
+Vorlage: `design/looks2/d-sammelmappe/` (vom Besitzer gewählt). Fotos der echten Qt-Oberfläche:
+`design/umsetzung/*.jpg`, neu erzeugen mit `tools/umsetzung_fotos.py` (ohne Netz, BBB-Standbild).
+- Aufbau: schmale Leiste (Logo, „Sammeln“, „Dateien“, Menü ☰ = `Strg+K`; **keine Menüleiste mehr**,
+  alle `QAction`s hängen per `addAction` am Fenster, sonst greifen I/O/M nicht), links „Deine Quelle“,
+  rechts „Sammelmappe“ (Zettel + abgelegte Ausschnitte + Hauptaktion → Lieferliste beim Laden).
+  Vor der ersten Analyse nur der Einstieg; das Link-Feld wird danach in die Quelle umgehängt
+  (`_place_source_editor`).
+- Eigene Bedienelemente in `gui/widgets.py` (QAbstractButton-Basis: Fokusring nur bei Tab,
+  Hover 120 ms, Druck 0,97), Symbole + Logo in `gui/icons.py` (eigener SVG-Pfad-Leser – **QtSvg ist
+  in `fevdl.spec` ausgeschlossen**). `ChoiceGroup` hat die QComboBox-Schnittstelle (`findData`,
+  `currentData` …), daher blieb die Logik zu `Mode.value`/Qualität unverändert.
+- Zeitleiste (`trim_bar.py`): Übersicht + Detail ≥ 146 px, zoomt auf Auswahl ± Rand (Lupe schaltet
+  um). **Beim Ziehen steht die Skala still**, erst nach dem Loslassen gleitet sie (160 ms); über den
+  Rand gezogen erweitert sie sich. Werte rasten auf 0,1 s, Zeitfelder zeigen Zehntel
+  (`precise_timecode`). Wellenform jetzt mit 10 Werten/s (max. 36 000), sonst wäre der Zoom grob.
+- `worker.DownloadWorker.partReady(index, path)` neu – die Lieferliste hakt jeden Auftrag einzeln ab.
+- Einzige Backend-Änderung: Text in `core/errors.py` („Hilfe ->“ → „Menue (unten links) ->“).
+- Tests: 19 ohne Netz grün (neu `test_sammelmappe.py`; `test_library.py` prüft jetzt Namen/Tooltips
+  statt alter Objektnamen). Mit Netz, in Resolve, bei 125/150 % Skalierung **nicht geprüft**.
+- Offen: Abweichungen vom Mockup bewusst (Link-Feld bleibt in der Quelle sichtbar, „Ablegen“ nur
+  einmal im Zettel statt doppelt, kein Bildformat-Knopf und kein „Mit BBB ausprobieren“ – waren
+  Mockup-Hilfen). Nur helles Thema. Nutzertexte weiter mit ae/oe/ue. Installer/Release erst nach
+  Freigabe des Besitzers (Nummer erhöhen!). Bibliotheks-Vorschaubilder brauchen ~3 s je Datei
+  (ffmpeg `thumbnail=240`, unverändert) – fiel erst jetzt auf.
+
+**Arbeitsweise mit dem Besitzer:** Er schreibt Deutsch und knapp, will kurze Antworten und
+ehrliche Einschätzungen, vor allem vor Veröffentlichungen. Nichts Online-Sichtbares ohne
+Freigabe (GitHub-Konto `fevzyy72`, `gh` ist installiert unter
+`C:\Program Files\GitHub CLI\gh.exe`). Neue Fassung: Nummer in `src\fevdl\__init__.py`
+erhöhen, committen, `release.ps1`.
+
+**Fallen aus der Redesign-Runde:** Ein Kind-Widget, das man ausdrücklich `setEnabled(False)`
+setzt, wird beim Freigeben des Elternteils **nicht** wieder aktiv (Qt merkt sich „selbst gesperrt“)
+– darum vererbt `ChoiceGroup` den Zustand nur. Ein neuer `objectName` wirkt erst nach
+`style().unpolish/polish`. Fokusring nur für `Tab/Backtab/Shortcut`-Gründe, sonst leuchtet er schon
+beim Start.
+
+**Fallen aus der Runde davor:** In PowerShell 5.1 nie `Start-Process -Wait` auf den Installer
+(wartet auf die neu gestartete App); Installer-Update braucht erzwungenes Schließen
+(Abschnitt 5); mehrzeilige Python-Skripte nicht per Heredoc in die Git-Bash, sondern als
+Datei schreiben.
+
 ---
 
 ## 1. Was das ist
@@ -113,7 +177,10 @@ davinciplugin/
 ├── requirements.txt          yt-dlp, PySide6
 ├── bin/                      ffmpeg.exe, ffprobe.exe (lokal, nicht eingecheckt)
 ├── assets/fevdl.ico          Programmsymbol
-├── tools/make_icon.py        Erzeugt das Symbol
+├── PRODUCT.md                Produktbeschreibung (Skill impeccable), Basis für Design-Arbeit
+├── design/                   Vorlagen (Codex); looks2/d-sammelmappe = gewählt; umsetzung/ = Qt-Fotos
+├── tools/make_icon.py        Erzeugt assets/fevdl.ico aus gui/icons.draw_logo (16–256 px)
+├── tools/umsetzung_fotos.py  Bildschirmfotos aller Zustände nach design/umsetzung/
 ├── tests/                    Testreihe + run_tests.ps1
 ├── resolve/
 │   ├── FevDownloader.py      Läuft IN Resolve  ← nur Standardbibliothek!
@@ -133,10 +200,12 @@ davinciplugin/
     │   ├── appupdate.py      Neue App-Fassung: GitHub-Release abfragen, Installer laden und starten
     │   └── errors.py         Deutsche Fehlermeldungen (humanize)
     └── gui/
-        ├── main_window.py    Hauptfenster, hält den ganzen Ablauf zusammen
-        ├── library_page.py   Medienbibliothek: Ordner scannen, suchen und filtern
-        ├── preview_player.py Player, Bildformat, Ausweichmeldung
-        ├── trim_bar.py       Ausschnitt-Balken, selbst gezeichnet
+        ├── main_window.py    Hauptfenster: Leiste, Quelle, Sammelmappe, Lieferliste
+        ├── library_page.py   Medienbibliothek („Dateien“): Suche, Filter, Zeilen per Delegate
+        ├── preview_player.py Player, Bildformat (dunkle Bühne), Ausweichmeldung
+        ├── trim_bar.py       Zeitleiste: Übersicht + gezoomtes Detail, selbst gezeichnet
+        ├── widgets.py        Eigene Bedienelemente (Knöpfe, Karten, Chips, Schalter, Hauptaktion …)
+        ├── icons.py          Strichsymbole + Logo als QPainter-Pfade
         ├── worker.py         QThreads: Probe, Thumbnail, Preview, Waveform,
         │                     Download (auch mehrere), LibraryThumb
         ├── typography.py     Schriften  ← Schriftgrößen NUR hier, nie im Stylesheet
@@ -562,7 +631,7 @@ Resolves Vorschlag kam nie wieder zum Zug. Abgesichert in
 
 ## 6. Tests
 
-`tests/run_tests.ps1` — 17 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
+`tests/run_tests.ps1` — 17 Testdateien ohne Internet, sechs weitere mit `-MitNetz`.
 
 **Ein Test muss scheitern können.** `test_preview.py` meldete früher „in Ordnung“,
 wenn keine Vorschau vorhanden war, und beendete sich selbst bei „spielt nicht“ mit
@@ -618,6 +687,12 @@ Das eigentliche Protokoll steht in `%LOCALAPPDATA%\FevDownloader\launcher.log`.
 
 ## 8. Was noch offen ist
 
+- **Redesign „Sammelmappe“** umgesetzt, wartet auf Freigabe/Commit – Stand in Abschnitt 0.
+- Der Ablauf „zweites Release → Aktualisierung in der App“ wurde noch nicht mit zwei
+  echten GitHub-Fassungen durchgespielt (Einzelteile sind getestet).
+- Gepackte App meldet 33 statt 47 Browser-Ziele für TikTok (Quelltext: 47), ohne erkannten
+  Grund; die TikTok-Analyse im Selbsttest klappt trotzdem.
+- `tests/test_launcher.py` schreibt bei jedem Lauf in das echte `launcher.log`.
 - Die Wellenform könnte automatisch nach der Analyse laden (0,9 s gemessen).
   Der Nutzer hat sich zunächst für den Knopf entschieden.
 - Mehrere **Videos** gleichzeitig sind nicht vorgesehen; es läuft immer eines.

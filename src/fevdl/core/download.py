@@ -15,6 +15,7 @@ from yt_dlp.utils import download_range_func
 from .. import paths
 from .errors import CancelledError, DownloadError, humanize
 from .models import DownloadRequest, Mode, Progress
+from .urls import web_url
 
 ProgressCallback = Callable[[Progress], None]
 CancelCheck = Callable[[], bool]
@@ -56,6 +57,7 @@ def download(
     zweistuendigen Video fuer 30 Sekunden Ausschnitt wandert also nur ein
     Bruchteil durch die Leitung.
     """
+    _check_download_url(request.url)
     if not paths.ffmpeg_available():
         raise DownloadError(
             "ffmpeg fehlt. Bitte setup.ps1 ausfuehren, damit es nach bin/ geladen wird."
@@ -95,6 +97,9 @@ def download_preview(
     Bewusst ohne Ausschnitt und in niedriger Qualitaet - sie dient nur dem
     Anschauen, geladen wird spaeter ohnehin neu.
     """
+    url = _check_download_url(url)
+    if not paths.ffmpeg_available():
+        raise DownloadError("ffmpeg fehlt. Bitte setup.ps1 ausfuehren.")
     _announce_ffmpeg_location()
     paths.ensure_dir(target_dir)
 
@@ -131,6 +136,13 @@ def download_preview(
     if result is None or not result.is_file():
         raise DownloadError("Die Vorschau liess sich nicht laden.")
     return result
+
+
+def _check_download_url(url: str) -> str:
+    try:
+        return web_url(url)
+    except ValueError as error:
+        raise DownloadError(str(error)) from error
 
 
 def _run_with_retries(

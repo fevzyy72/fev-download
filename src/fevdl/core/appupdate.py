@@ -22,13 +22,15 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from .. import paths
+from .transport import open_https
 
 GITHUB_REPO = "fevzyy72/fev-download"
 RELEASE_API = "https://api.github.com/repos/{}/releases/latest".format(GITHUB_REPO)
@@ -42,6 +44,8 @@ ASSET_NAME = "FevDownloadSetup.exe"
 CHECK_TIMEOUT = 8
 DOWNLOAD_TIMEOUT = 30
 USER_AGENT = "FevDownload"
+DOWNLOAD_HOSTS = frozenset({"github.com", "release-assets.githubusercontent.com",
+                            "objects.githubusercontent.com"})
 
 ProgressCallback = Callable[[int], None]
 CancelCheck = Callable[[], bool]
@@ -65,7 +69,8 @@ class AppRelease:
 
 def _open(url: str, timeout: float, accept: str = "*/*"):
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": accept})
-    return urlopen(request, timeout=timeout)
+    hosts = frozenset({"api.github.com"}) if url == RELEASE_API else DOWNLOAD_HOSTS
+    return open_https(request, timeout, hosts)
 
 
 def _explain(error: Exception) -> str:
@@ -103,6 +108,8 @@ def parse_release(data: dict) -> AppRelease:
 
     digest = str(asset.get("digest") or "")
     sha256 = digest.split(":", 1)[1].lower() if digest.lower().startswith("sha256:") else None
+    if digest and (sha256 is None or not re.fullmatch(r"[0-9a-f]{64}", sha256)):
+        raise UpdateError("Die Pruefsumme des Installers ist unlesbar.")
 
     return AppRelease(
         version=version,
@@ -110,7 +117,8 @@ def parse_release(data: dict) -> AppRelease:
         size=int(asset.get("size") or 0),
         sha256=sha256,
         notes=str(data.get("body") or "").strip(),
-        page=str(data.get("html_url") or RELEASES_PAGE),
+        # Die Oberflaeche oeffnet diese Adresse im Browser.
+        page=RELEASES_PAGE,
     )
 
 
@@ -167,11 +175,23 @@ def download_installer(
     """
     if not release.url.startswith(DOWNLOAD_PREFIX):
         raise UpdateError("Die Download-Adresse des Installers ist nicht vertrauenswuerdig.")
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", release.version):
+        raise UpdateError("Die Fassungsnummer des Installers ist unlesbar.")
+    if release.size < 0:
+        raise UpdateError("Die Dateigroesse des Installers ist unlesbar.")
 
-    folder = update_dir()
-    # Alte Reste weg: sonst sammeln sich mit jeder Fassung 100 MB an.
-    shutil.rmtree(folder, ignore_errors=True)
-    paths.ensure_dir(folder)
+    root = paths.ensure_dir(update_dir())
+    # Erfolgreiche Installer bleiben kurz fuer Diagnose/Neustart erhalten.
+    # Nur eigene alte Laufordner entfernen, keine parallel geladenen Dateien.
+    for old in root.glob("lauf-*"):
+        try:
+            if old.is_dir() and not old.is_symlink() and old.stat().st_mtime < time.time() - 7 * 86400:
+                shutil.rmtree(old)
+        except OSError:
+            pass
+    # Jeder Lauf bekommt einen eigenen Ordner. Gleichzeitige Downloads duerfen
+    # einander weder loeschen noch eine bereits gepruefte Datei ersetzen.
+    folder = Path(tempfile.mkdtemp(prefix="lauf-", dir=root))
     target = folder / "FevDownloadSetup-{}.exe".format(release.version)
     partial = target.with_suffix(".teil")
 
@@ -189,22 +209,24 @@ def download_installer(
                 out.write(block)
                 digest.update(block)
                 received += len(block)
+                if release.size and received > release.size:
+                    raise UpdateError("Die Dateigroesse des Installers stimmt nicht.")
                 if on_progress is not None and total:
                     on_progress(min(99, int(received * 100 / total)))
     except UpdateError:
-        partial.unlink(missing_ok=True)
+        shutil.rmtree(folder, ignore_errors=True)
         raise
     except Exception as error:
-        partial.unlink(missing_ok=True)
+        shutil.rmtree(folder, ignore_errors=True)
         raise UpdateError(_explain(error)) from error
 
-    if release.size and received != release.size:
-        partial.unlink(missing_ok=True)
+    if not received or (release.size and received != release.size):
+        shutil.rmtree(folder, ignore_errors=True)
         raise UpdateError(
             "Der Download ist unvollstaendig ({} von {} Bytes).".format(received, release.size)
         )
     if release.sha256 and digest.hexdigest().lower() != release.sha256:
-        partial.unlink(missing_ok=True)
+        shutil.rmtree(folder, ignore_errors=True)
         raise UpdateError("Die geladene Datei ist beschaedigt (Pruefsumme stimmt nicht).")
 
     partial.replace(target)

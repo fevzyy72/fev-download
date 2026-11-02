@@ -9,6 +9,7 @@ from yt_dlp.utils import DownloadError as YtDlpDownloadError
 
 from .errors import ProbeError, humanize
 from .models import Quality, VideoInfo
+from .urls import web_url
 
 # Fuer die Vorschau reicht wenig Aufloesung - Hauptsache sofort abspielbar.
 PREVIEW_MAX_HEIGHT = 480
@@ -30,6 +31,10 @@ def probe(url: str) -> VideoInfo:
     url = (url or "").strip()
     if not url:
         raise ProbeError("Bitte zuerst einen Link einfuegen.")
+    try:
+        url = web_url(url)
+    except ValueError as error:
+        raise ProbeError(str(error)) from error
 
     try:
         with YoutubeDL(_base_options()) as ydl:

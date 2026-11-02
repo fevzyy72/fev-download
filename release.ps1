@@ -13,8 +13,8 @@
 #   -OhneTests    Testlauf ueberspringen (nicht empfohlen)
 #   -OhneBau      Den schon gebauten dist\FevDownloadSetup.exe veroeffentlichen,
 #                 statt neu zu bauen. Fuer den Fall, dass genau diese Datei vorher
-#                 geprueft wurde (z. B. mit --selbsttest). Verweigert sich, wenn
-#                 seit dem Bau etwas im Quelltext geaendert wurde.
+#                 geprueft wurde. Benoetigt dist\bau.json mit passendem Hash,
+#                 Git-Stand, Fassung und bestandenem Selbsttest.
 
 param(
     [string]$Notizen = "",
@@ -53,20 +53,24 @@ if ($LASTEXITCODE -ne 0) { Stop-Release "Bei GitHub nicht angemeldet. Einmalig: 
 Write-Ok "GitHub CLI angemeldet."
 
 $Dirty = git status --porcelain
+if ($LASTEXITCODE -ne 0) { Stop-Release "Git-Status konnte nicht gelesen werden." }
 if ($Dirty) {
     Write-Host $Dirty
     Stop-Release "Es gibt nicht committete Aenderungen. Erst committen, damit die Fassung genau dem Stand auf GitHub entspricht."
 }
 Write-Ok "Arbeitsbaum sauber."
+$Branch = git branch --show-current
+if ($LASTEXITCODE -ne 0 -or $Branch -ne "main") { Stop-Release "Releases nur vom Branch main erstellen." }
 
 $InitFile = Join-Path $ProjectRoot "src\fevdl\__init__.py"
 $Match = Select-String -Path $InitFile -Pattern '__version__\s*=\s*"([^"]+)"'
 if (-not $Match) { Stop-Release "In src\fevdl\__init__.py steht keine Fassungsnummer." }
 $Version = $Match.Matches[0].Groups[1].Value
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { Stop-Release "Fassungsnummer muss x.y.z sein." }
 $Tag = "v$Version"
 Write-Ok "Fassung $Version (Tag $Tag)"
 
-& $Gh release view $Tag *> $null
+& $Gh release view $Tag --repo fevzyy72/fev-download *> $null
 if ($LASTEXITCODE -eq 0) {
     Stop-Release "Die Fassung $Version ist schon veroeffentlicht. Bitte in __init__.py erhoehen."
 }
@@ -95,11 +99,24 @@ if ($OhneBau) {
     Write-Ok "Installer ist neuer als der gesamte Quelltext."
 } else {
     Write-Step "Installer bauen"
-    powershell -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "build_installer.ps1")
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "build_installer.ps1") -OhneTests
     if ($LASTEXITCODE -ne 0) { Stop-Release "Der Bau ist fehlgeschlagen." }
     if (-not (Test-Path $Setup)) { Stop-Release "dist\FevDownloadSetup.exe fehlt." }
 }
 Write-Ok ("{0:N0} MB" -f ((Get-Item $Setup).Length / 1MB))
+
+# Zeitstempel allein beweisen weder Version noch erfolgreichen Selbsttest.
+try {
+    $Evidence = Get-Content -LiteralPath (Join-Path $ProjectRoot "dist\bau.json") -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    $Head = git rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) { throw "Git-Stand nicht lesbar." }
+    $Hash = (Get-FileHash -LiteralPath $Setup -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+    if ($Evidence.version -ne $Version -or $Evidence.commit -ne $Head -or
+        $Evidence.sha256 -ne $Hash -or $Evidence.selbsttest -ne "bestanden" -or
+        $Evidence.arbeitsbaum_sauber -ne $true) {
+        throw "Bau-Nachweis passt nicht zu Fassung, Git-Stand oder Installer."
+    }
+} catch { Stop-Release ("Installer neu bauen: " + $_.Exception.Message) }
 
 # ---------------------------------------------------------------------------
 Write-Step "Auf GitHub hochladen"
@@ -108,8 +125,13 @@ git push origin main
 if ($LASTEXITCODE -ne 0) { Stop-Release "git push ist fehlgeschlagen." }
 
 if (-not $Notizen) { $Notizen = "Fev Download $Version" }
-& $Gh release create $Tag $Setup --target main --title "Fev Download $Version" --notes $Notizen
-if ($LASTEXITCODE -ne 0) { Stop-Release "Das Release liess sich nicht anlegen." }
+$NotesFile = [System.IO.Path]::GetTempFileName()
+try {
+    [System.IO.File]::WriteAllText($NotesFile, $Notizen, (New-Object System.Text.UTF8Encoding($false)))
+    & $Gh release create $Tag $Setup --repo fevzyy72/fev-download --target $Head --title "Fev Download $Version" --notes-file $NotesFile
+    if ($LASTEXITCODE -ne 0) { throw "Das Release liess sich nicht anlegen." }
+} catch { Stop-Release $_.Exception.Message }
+finally { Remove-Item -LiteralPath $NotesFile -Force -ErrorAction SilentlyContinue }
 
 Write-Host ""
 Write-Host "Fertig: Fassung $Version ist veroeffentlicht." -ForegroundColor Green

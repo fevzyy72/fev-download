@@ -17,15 +17,19 @@ wuerde in den Installationsordner schreiben wollen.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
+import re
 import shutil
 import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from .. import paths
+from .transport import open_https
 
 PYPI_URL = "https://pypi.org/pypi/yt-dlp/json"
 TIMEOUT = 30
@@ -44,22 +48,27 @@ class UpdateResult:
 
 def _fetch(url: str) -> bytes:
     request = Request(url, headers={"User-Agent": USER_AGENT})
-    with urlopen(request, timeout=TIMEOUT) as response:
+    with open_https(request, TIMEOUT, frozenset({"pypi.org", "files.pythonhosted.org"})) as response:
         return response.read()
 
 
-def latest_version() -> tuple[str, str]:
+def latest_version() -> tuple[str, str, str]:
     """
     Fragt PyPI nach der neuesten Fassung.
 
-    Rueckgabe: (Fassung, Adresse des Rads)
+    Rueckgabe: (Fassung, Adresse des Rads, SHA-256 aus den PyPI-Metadaten).
     """
     data = json.loads(_fetch(PYPI_URL).decode("utf-8"))
     version = data["info"]["version"]
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version):
+        raise RuntimeError("Auf PyPI liegt keine stabile yt-dlp-Fassung bereit.")
 
     for entry in data["urls"]:
-        if entry.get("packagetype") == "bdist_wheel":
-            return version, entry["url"]
+        if entry.get("packagetype") == "bdist_wheel" and not entry.get("yanked"):
+            digest = entry.get("digests", {}).get("sha256", "")
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+                raise RuntimeError("Die PyPI-Pruefsumme fuer yt-dlp fehlt oder ist unlesbar.")
+            return version, entry["url"], digest.lower()
 
     raise RuntimeError("Auf PyPI liegt kein fertiges Paket fuer yt-dlp bereit.")
 
@@ -91,17 +100,25 @@ def _extract_wheel(wheel: bytes, target: Path) -> None:
         shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir(parents=True, exist_ok=True)
 
-    archive = target.with_name(target.name + ".whl")
-    archive.write_bytes(wheel)
     try:
-        with zipfile.ZipFile(archive) as bundle:
+        with zipfile.ZipFile(io.BytesIO(wheel)) as bundle:
             # Nur das Paket selbst; die Metadaten-Ordner (.dist-info) braucht
             # niemand, wenn nicht ueber pip installiert wird.
-            for member in bundle.namelist():
-                if member.startswith("yt_dlp/"):
-                    bundle.extract(member, staging)
-    finally:
-        archive.unlink(missing_ok=True)
+            members = [m for m in bundle.infolist() if m.filename.startswith("yt_dlp/")]
+            for member in members:
+                name = member.filename
+                # ZIP-Namen sind POSIX-Pfade. Unter Windows waeren ausserdem
+                # Rueckstriche, Laufwerke und NTFS-Datenstroeme gefaehrlich.
+                if ("\\" in name or ":" in name or "\x00" in name
+                        or any(p in (".", "..") or p.endswith((".", " "))
+                               for p in name.rstrip("/").split("/"))
+                        or (member.external_attr >> 16) & 0o170000 == 0o120000):
+                    raise RuntimeError("Das yt-dlp-Paket enthaelt einen ungueltigen Dateipfad.")
+            for member in members:
+                bundle.extract(member, staging)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
     if not (staging / "yt_dlp" / "version.py").is_file():
         shutil.rmtree(staging, ignore_errors=True)
@@ -124,7 +141,7 @@ def update_ytdlp() -> UpdateResult:
     Betrieb austauschen.
     """
     running = current_version()
-    newest, wheel_url = latest_version()
+    newest, wheel_url, expected_hash = latest_version()
 
     if paths.version_key(newest) <= paths.version_key(running):
         return UpdateResult(
@@ -145,7 +162,10 @@ def update_ytdlp() -> UpdateResult:
             ),
         )
 
-    _extract_wheel(_fetch(wheel_url), paths.YTDLP_DIR)
+    wheel = _fetch(wheel_url)
+    if hashlib.sha256(wheel).hexdigest() != expected_hash:
+        raise RuntimeError("Die Pruefsumme des yt-dlp-Pakets stimmt nicht.")
+    _extract_wheel(wheel, paths.YTDLP_DIR)
 
     return UpdateResult(
         changed=True,

@@ -191,12 +191,12 @@ class DownloadTests(unittest.TestCase):
             path = appupdate.download_installer(self._release(sha256=None))
         self.assertTrue(path.is_file())
 
-    def test_alte_reste_werden_entfernt(self):
+    def test_anderer_download_bleibt_unberuehrt(self):
         self.folder.mkdir(parents=True)
         (self.folder / "FevDownloadSetup-0.9.exe").write_bytes(b"alt")
         with self._serve():
             appupdate.download_installer(self._release())
-        self.assertFalse((self.folder / "FevDownloadSetup-0.9.exe").exists())
+        self.assertTrue((self.folder / "FevDownloadSetup-0.9.exe").exists())
 
     def test_netzfehler_beim_laden(self):
         with patch.object(appupdate, "_open", side_effect=URLError("weg")), self.assertRaises(UpdateError):
@@ -269,7 +269,7 @@ class YtdlpCheckThrottleTests(unittest.TestCase):
     def test_schon_geladene_fassung_wird_nicht_nochmal_geholt(self):
         with (
             patch.object(update, "current_version", return_value="2026.08.19"),
-            patch.object(update, "latest_version", return_value=("2026.11.5", "wheel")),
+            patch.object(update, "latest_version", return_value=("2026.11.5", "wheel", "00" * 32)),
             patch.object(paths, "installed_ytdlp_version", return_value="2026.11.05"),
             patch.object(update, "_fetch") as fetch,
         ):

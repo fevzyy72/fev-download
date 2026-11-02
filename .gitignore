@@ -20,7 +20,21 @@ job.json
 result.json
 thumbs/
 
+# Zugangsdaten und lokale Browserprofile niemals versehentlich weitergeben.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+cookies.txt
+*.cookies.txt
+design/**/_work/
+design/**/browser-profile/
+
 # Editor und Betriebssystem
 .vscode/
 Thumbs.db
 desktop.ini
+
+# Entwuerfe und Vorlagen des Designs: nur lokal (enthalten Beispielpfade, 17 MB)
+design/

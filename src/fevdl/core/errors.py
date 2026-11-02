@@ -33,7 +33,7 @@ def humanize(raw_message: str) -> str:
     )):
         return (
             "TikTok liefert gerade keine abrufbaren Videodaten. "
-            "Unter Hilfe -> Nach Aktualisierung suchen pruefen. "
+            "Im Menue (unten links) -> Nach Aktualisierung suchen pruefen. "
             "Bei einer aelteren App den aktuellen Installer verwenden."
         )
 

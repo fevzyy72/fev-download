@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from .. import paths
 from .errors import CancelledError, FevError
+from .urls import web_url
 
 # Zum Zeichnen voellig ausreichend und klein genug, um schnell zu bleiben.
 SAMPLE_RATE = 8000
@@ -45,6 +46,10 @@ def extract_peaks(
     """
     if not audio_url:
         raise WaveformError("Zu diesem Video gibt es keine abrufbare Tonspur.")
+    try:
+        audio_url = web_url(audio_url)
+    except ValueError as error:
+        raise WaveformError(str(error)) from error
     if not paths.ffmpeg_available():
         raise WaveformError("ffmpeg fehlt. Bitte setup.ps1 ausfuehren.")
 

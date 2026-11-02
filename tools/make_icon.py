@@ -1,8 +1,10 @@
 """Erzeugt das Programmsymbol assets/fevdl.ico.
 
-Gezeichnet statt gemalt: ein Pfeil nach unten auf eine Grundlinie - das
-allgemein verstaendliche Zeichen fuers Herunterladen. Bewusst schlicht, damit
-es auch bei 16 Bildpunkten in der Taskleiste noch erkennbar bleibt.
+Logo "Sammelmappe" (Gestaltung D): blaues Quadrat, darauf ein abgelegtes
+weisses Blatt mit ausgesparter Falte und zwei Inhaltslinien. Gezeichnet wird
+mit derselben Funktion wie in der Oberflaeche (src/fevdl/gui/icons.py), damit
+Taskleiste, Fensterkopf und Dialoge dasselbe Zeichen zeigen. Bis 24 Pixel gibt
+es eine pixelgenaue Fassung - herunterskaliert verschwimmen die Linien.
 
 Die .ico-Datei wird von Hand zusammengesetzt, weil sie mehrere Groessen
 enthalten soll und Qt beim Speichern nur eine einzige ablegen wuerde.
@@ -13,63 +15,30 @@ Aufruf:  python tools/make_icon.py
 from __future__ import annotations
 
 import struct
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QByteArray, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath
+from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
-SIZES = (16, 24, 32, 48, 64, 128, 256)
-OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "fevdl.ico"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-INK = QColor("#111111")
-PAPER = QColor("#FFFFFF")
+from fevdl.gui.icons import draw_logo, draw_logo_small  # noqa: E402
+
+SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "fevdl.ico"
 
 
 def draw_icon(size: int) -> QImage:
     """Zeichnet das Symbol in der gewuenschten Kantenlaenge."""
     image = QImage(size, size, QImage.Format_ARGB32)
     image.fill(Qt.transparent)
-
     painter = QPainter(image)
-    painter.setRenderHint(QPainter.Antialiasing)
-
-    unit = size / 256.0
-
-    # Grundflaeche
-    background = QPainterPath()
-    background.addRoundedRect(QRectF(0, 0, size, size), 56 * unit, 56 * unit)
-    painter.fillPath(background, INK)
-
-    painter.setPen(Qt.NoPen)
-    painter.setBrush(PAPER)
-
-    # Schaft des Pfeils
-    stem = QPainterPath()
-    stem.addRoundedRect(
-        QRectF(115 * unit, 52 * unit, 26 * unit, 78 * unit),
-        13 * unit,
-        13 * unit,
-    )
-    painter.drawPath(stem)
-
-    # Spitze
-    head = QPainterPath()
-    head.moveTo(78 * unit, 118 * unit)
-    head.lineTo(178 * unit, 118 * unit)
-    head.lineTo(128 * unit, 180 * unit)
-    head.closeSubpath()
-    painter.drawPath(head)
-
-    # Grundlinie
-    baseline = QPainterPath()
-    baseline.addRoundedRect(
-        QRectF(62 * unit, 196 * unit, 132 * unit, 22 * unit),
-        11 * unit,
-        11 * unit,
-    )
-    painter.drawPath(baseline)
-
+    if size <= 24:
+        draw_logo_small(painter, size)
+    else:
+        draw_logo(painter, QRectF(0, 0, size, size))
     painter.end()
     return image
 
@@ -126,6 +95,9 @@ def main() -> None:
     app = QApplication([])  # noqa: F841 - QPainter braucht eine Anwendung
     images = [draw_icon(size) for size in SIZES]
     build_ico(images, OUTPUT)
+    if "--vorschau" in sys.argv:
+        for image in images:
+            image.save(str(OUTPUT.with_name(f"_logo_{image.width()}.png")))
     print(f"Symbol geschrieben: {OUTPUT}")
     print(f"Groessen: {', '.join(str(s) for s in SIZES)}")
     print(f"Dateigroesse: {OUTPUT.stat().st_size / 1024:.1f} KB")

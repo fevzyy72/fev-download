@@ -1,0 +1,88 @@
+FFmpeg / ffprobe 9.0 - Quellen und Originalhinweise
+==================================================
+Stand: 02.11.2026. Keine Rechtsberatung, keine Vollstaendigkeitsgarantie.
+
+Mitgelieferte Programme:
+  9.0-essentials_build-www.gyan.dev, gcc 16.1.0 (MSYS2 Rev2)
+  Copyright (c) 2000-2026 the FFmpeg developers.
+  --enable-gpl --enable-version3 --enable-static, daher GPLv3.
+  Die App ruft diese unveraenderten EXEs als eigene Prozesse auf.
+
+Exakte Zuordnung (beide EXEs bytegleich mit dem historischen Hersteller-ZIP):
+  https://github.com/GyanD/codexffmpeg/releases/tag/9.0
+  https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip
+  Archiv SHA-256: e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71
+  ffmpeg.exe: 227af0691433b703ffc5725e47f7d06eefc34b4a72e7870e73d30e2cda483ecf
+  ffprobe.exe: 901f0efe4793cbb0f017101e3427f816e8fbf9a407bd585f49df30f4325cfd88
+  gyan-Release vom 04.08.2026, Tag 9.0. Der automatisch von GitHub angebotene
+  Quelltext von GyanD/codexffmpeg ist NICHT der FFmpeg-Quelltext.
+
+FFmpeg-Quelle liegt hier DIREKT BEI, kein Internet zum Erhalten erforderlich:
+  ffmpeg-9.0.tar.xz (12.032.020 Bytes, inklusive configure und Makefiles)
+  https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz
+  SHA-256: 7f607a00dd0d28a729d5a4811205812eef01cf6ef6155025febb6f36a9062d52
+  Tag n9.0, Commit d32b387f2b0a484599d4587d651891f0c63c4238
+  https://github.com/FFmpeg/FFmpeg/tree/d32b387f2b0a484599d4587d651891f0c63c4238
+  Signatur ffmpeg-9.0.tar.xz.asc und Schluessel ffmpeg-devel.asc liegen bei.
+  Signatur am 02.11.2026 mit GnuPG geprueft, Fingerabdruck verglichen mit
+  https://ffmpeg.org/download.html :
+  FCF986EA15E6E293A5644F10B4322F04D67658D8
+  Die laufende Einrichtung prueft den fest hinterlegten SHA-256, sie benoetigt
+  kein installiertes GnuPG. Hash und Schluessel sind kein unabhaengiger Audit.
+
+Zusaetzliche Quellen liegen als unveraenderte Archive bei:
+  x264-0480cb0.tar.gz (1.040.667 Bytes), GPL-2.0-or-later
+    Commit 0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee (GitHub-Mirror).
+    Hersteller nennt v0.165.3223; ein lokal erzeugter H.264-Testframe nennt
+    zusaetzlich r3223 0480cb0. Kein fremdes Video fuer diese Zuordnung benutzt.
+  xvidcore-1.3.7.tar.gz (820.854 Bytes), GPL-2.0-or-later
+  rubberband-4.0.0.tar.gz (290.593 Bytes), GPL-2.0-or-later
+    Commit 1d95888bec3ae0a17c0c4af791810d5a63f6bc35
+  vidstab-8f5ce58.tar.gz (154.389 Bytes), GPL-2.0-or-later
+    Commit 8f5ce5838982804c0869e33ddc4968a3ceeda40c
+  Feste Downloadadressen, Groessen und SHA-256: ffmpeg-lock.json.
+  Original-Lizenz-/Copyright-Texte: third-party/ und in den Archiven selbst.
+  Die Quellen sind die belegten Upstream-Staende; unveroeffentlichte lokale
+  Hersteller-Patches lassen sich damit nicht ausschliessen.
+
+Weitere Unterlagen:
+  GYAN-README.txt: unveraendertes Original des exakt passenden Binaerarchivs,
+    inklusive Elementkonfiguration und externer Versionsliste am Dateiende.
+  GYAN-LICENSE.txt: GPLv3 aus demselben Archiv.
+  BUILD.txt: lokal aus -version / -buildconf gesicherte Konfiguration.
+  BIBLIOTHEKEN.tsv: externe Bibliotheken, belegte Staende, Lizenzbelege,
+    feste Quellenverweise und ausdrueckliche Luecken.
+  upstream/: originale FFmpeg-Lizenztexte und CREDITS aus ffmpeg-9.0.tar.xz.
+  ../HERKUNFT.json: Herkunft/Hash der zusaetzlich beigelegten Originaltexte.
+
+IJG-Hinweis gemaess FFmpeg LICENSE.md:
+  This software is based in part on the work of the Independent JPEG Group.
+  Fev Download hat die FFmpeg-Dateien jfdctfst.c, jfdctint_template.c und
+  jrevdct.c nicht geaendert. Hersteller-Patches sind nicht vollstaendig belegt.
+
+Was noch fehlt - KEINE bestaetigte vollstaendige Corresponding Source:
+  Gyan nennt nicht fuer jede aktivierte Bibliothek eine Version (u.a. GnuTLS,
+  GMP, libass, FreeType, Fontconfig, FriBidi, HarfBuzz, zlib). OpenAL heisst
+  nur "latest"; Cairo 1.18.5 allein identifiziert moegliche Snapshots nicht.
+  x265 ist 4.3-2-g5ab552e; das abgefragte Hersteller-Archiv fuer diesen Commit
+  lieferte 404. Weder beliebiges x265 4.3 noch 9.0.2 ersetzt diese Quelle.
+  Transitive Bibliotheken, exakte Patches, Bau-/Linkskripte und die komplette
+  Toolchain-/Paketliste des Herstellers sind nicht vollstaendig nachgewiesen.
+  README und -buildconf weichen z.B. bei libmfx voneinander ab; das wird nicht
+  als zusaetzliche sicher enthaltene Bibliothek ausgegeben.
+  Die aktuelle gyan-Webseite (inzwischen 9.0.2) ersetzt diese historischen
+  Unterlagen nicht. Alte 9.0-Binaerarchive liegen weiterhin bei GitHub.
+
+Quellenbezug / Angebot:
+  Die oben genannten fuenf Quellarchive begleiten diesen Installer unmittelbar.
+  Sie duerfen gemaess ihren Lizenzen kopiert und weitergegeben werden.
+  Bei einer fehlenden Kopie: https://github.com/fevzyy72/fev-download/issues
+  mit Fassung und ffmpeg-Hash nennen. Die Projektseite ist ein Kontaktweg,
+  kein bereits veroeffentlichter Spiegel der vollstaendigen Build-Quellen.
+  Es wird KEIN vollstaendiges schriftliches Angebot nach GPLv3 Abschnitt 6(b)
+  behauptet: Ein solches muss die vollstaendigen entsprechenden Quellen
+  tatsaechlich bereitstellen koennen und mindestens drei Jahre sowie solange
+  wie dort genannter Support/Ersatzteile angeboten werden gueltig sein.
+  Externe Links haben keine garantierte Gueltigkeitsdauer und ersetzen die
+  fehlenden Quellen nicht. Kein "auf Wunsch"-Versprechen fuer unbekannte Daten.
+  Die Weitergabe bleibt bis zur Klaerung dieser Luecken offen (SICHERHEIT.md).

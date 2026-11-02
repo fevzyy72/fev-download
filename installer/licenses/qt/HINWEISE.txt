@@ -1,0 +1,43 @@
+Qt / PySide6 / Shiboken6 6.12.0
+==============================
+Copyright und Lizenzen: Originaltexte im Ordner qtbase-6.12.0/ sowie in
+LGPL-3.0-only.txt / GPL-3.0-only.txt; Copyright-Inhaber je Komponente in
+den mitgelieferten qt_attribution.json und dazugehoerigen Lizenzdateien.
+Herkunft und SHA-256 stehen in ../HERKUNFT.json.
+
+PySide6/Shiboken6 bieten laut Upstream LGPLv3, GPL und kommerzielle Optionen:
+  https://github.com/pyside/pyside-setup/tree/v6.12.0
+  https://github.com/pyside/pyside-setup/blob/v6.12.0/README.pyside6_essentials.md
+Qt-Basisquellen und belegte Drittanbieterhinweise:
+  https://github.com/qt/qtbase/tree/v6.12.0
+  https://github.com/qt/qtbase/archive/refs/tags/v6.12.0.tar.gz
+Qt-Multimedia-Quellen:
+  https://github.com/qt/qtmultimedia/tree/v6.12.0
+  https://github.com/qt/qtmultimedia/archive/refs/tags/v6.12.0.tar.gz
+Pflichten: https://www.qt.io/development/open-source-lgpl-obligations
+
+Die entsprechenden Bibliotheken liegen als austauschbare DLLs unter
+_internal/PySide6/ und _internal/shiboken6/. Die Nutzung schraenkt das
+Austauschen kompatibler geaenderter Bibliotheken und Reverse Engineering
+zum Debuggen dieser Aenderungen nicht ein. Keine entsprechende Sperre in
+Fev Download. Eine reine DLL-Auslieferung erfuellt nicht alle LGPL-Pflichten.
+
+OFFEN: Die installierten Windows-Wheels enthalten in ihren dist-info/licenses
+nur LicenseRef-Qt-Commercial.txt. Dieser Text allein belegt weder eine
+kommerzielle Berechtigung des Besitzers noch vollstaendige LGPL-Erfuellung.
+Die hier ergaenzten Open-Source-Texte und QtBase-Attributionen kommen aus dem
+passenden Upstream-Tag; sie sind kein Nachweis aller Wheel-Bauoptionen oder
+aller tatsaechlich eingebauten Drittanbieterbestandteile.
+Noch abzugleichen: weitere Qt-Module, PySide-/Shiboken-Copyrights/Bauhinweise,
+passende Bibliotheksquellen, Multimedia-FFmpeg-DLLs, Mesa/opengl32sw.dll,
+Microsoft-Laufzeitdateien sowie Quellenbereitstellung und Austauschbarkeit.
+
+Besonders zu pruefen: PyInstaller sammelt auch Qt6VirtualKeyboard.dll und
+platforminputcontexts/qtvirtualkeyboardplugin.dll. Qt Virtual Keyboard ist
+laut Hersteller GPLv3 oder kommerziell, keine allgemeine LGPLv3-Zusicherung:
+  https://doc.qt.io/qt-6/qtvirtualkeyboard-index.html#licenses-and-attributions
+  https://github.com/qt/qtvirtualkeyboard/tree/v6.12.0
+Die App importiert dieses Modul nicht ausdruecklich. Vor Weitergabe entweder
+den unnoetigen Plugin-Pfad samt Abhaengigkeiten gezielt ausschliessen und
+testen oder die einschlaegigen Lizenz-/Quellenpflichten erfuellen.
+Dieser Lizenzauftrag veraendert die Qt-Laufzeit-Zusammenstellung nicht.

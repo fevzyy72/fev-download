@@ -36,6 +36,8 @@ Write-Host "    OK" -ForegroundColor Green
 
 # Ohne Netz -------------------------------------------------------------
 $Offline = @(
+    @{ Datei = "test_security.py"; Was = "Sicherheitsgrenzen: Redirects, Hash, ZIP, Links und Dateinamen" },
+    @{ Datei = "test_thumbnail_limit.py"; Was = "Vorschaubild: nur http/https, hoechstens 10 MiB" },
     @{ Datei = "test_tiktok_support.py"; Was = "TikTok ohne FPS, Fehlermeldungen und Aktualisierungen" },
     @{ Datei = "test_preview_format.py"; Was = "Vorschau: Formatwahl fuer YouTube, TikTok und andere" },
     @{ Datei = "test_ytdlp_vorrang.py";  Was = "yt-dlp: die neuere Fassung gewinnt (mitgeliefert/nachgeladen)" },
@@ -52,6 +54,7 @@ $Offline = @(
     @{ Datei = "test_segments.py";     Was = "Scrub-Vorschau und mehrere Ausschnitte" },
     @{ Datei = "test_portrait.py";     Was = "Hochformat und Vorschau-Ausweichloesung" },
     @{ Datei = "test_waveform_gui.py"; Was = "Wellenform-Knopf" },
+    @{ Datei = "test_sammelmappe.py";  Was = "Sammelmappe: Tastatur, Zoom, Geometrie, Lieferliste" },
     @{ Datei = "test_clean_exit.py";   Was = "Sauberes Beenden" }
 )
 
@@ -73,7 +76,9 @@ Write-Host "==> Tests" -ForegroundColor Cyan
 $failed = 0
 foreach ($eintrag in $Liste) {
     $pfad = Join-Path $TestDir $eintrag.Datei
-    $ausgabe = & $Python -u $pfad 2>&1
+    # Auch QSettings(org, app) muss isoliert sein: LOCALAPPDATA allein
+    # schuetzt unter Windows nicht vor clear() auf den echten Einstellungen.
+    $ausgabe = & $Python -u (Join-Path $TestDir "run_isolated.py") $pfad 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host ("    OK      " + $eintrag.Was) -ForegroundColor Green
     } else {

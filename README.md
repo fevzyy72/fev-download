@@ -20,11 +20,11 @@ gewünschten Ausschnitt heraus und übergibt ihn direkt an DaVinci Resolve.
 - **Die Vorschau folgt dem Griff** — beim Ziehen springt das Bild sofort an diese Stelle
   und die Zeit steht über dem Griff. Man sieht also genau, an welchem Bild geschnitten
   wird, statt nur eine Zahl zu lesen
-- **Mehrere Stellen aus einem Video** — Ausschnitt setzen, **+ Ausschnitt** drücken,
-  nächste Stelle suchen, wieder drücken. Alle gemerkten Stellen werden nacheinander
-  geladen und jede wird eine eigene Datei
-- **Tonspur sichtbar machen** — Lautstärkeverlauf im Ausschnitt-Balken, damit man sieht,
-  wo ein Lied anfängt und aufhört
+- **Mehrere Stellen aus einem Video** — Ausschnitt setzen, **Ablegen** drücken, nächste
+  Stelle suchen, wieder ablegen. Alles in der *Sammelmappe* wird gleichzeitig geladen
+  und jede Stelle wird eine eigene Datei
+- **Tonspur sichtbar machen** — Lautstärkeverlauf in der Zeitleiste. Sie zoomt
+  automatisch auf die Auswahl, darüber zeigt eine Übersicht das ganze Video
 - **Video + Ton, nur Ton oder nur Video** — in jeder Qualität, die es beim Video gibt
 - **Automatisch im Media Pool** — beim Start aus Resolve heraus landet der fertige Clip
   im offenen Projekt
@@ -72,7 +72,7 @@ Fev Download hält sich selbst auf dem neuesten Stand — an zwei Stellen:
   öffnet sich von selbst wieder. Jede Fassung wird nur einmal angeboten; wer
   „Nein“ sagt, wird nicht bei jedem Start gefragt.
 
-Von Hand: **Hilfe → Nach Aktualisierung suchen** prüft beides sofort.
+Von Hand: **Menü (☰ unten links, `Strg`+`K`) → Nach Aktualisierung suchen** prüft beides sofort.
 
 Die neuen Fassungen liegen unter
 [Releases](https://github.com/fevzyy72/fev-download/releases/latest).
@@ -89,7 +89,7 @@ ebenfalls richtig als Video erkannt und lassen sich mit Bild und Ton laden.
 
 **Workspace → Scripts → Utility → FevDownloader**
 
-Ein grüner Streifen im Fenster bestätigt die Verbindung. Jeder fertige Download
+Ein blauer Hinweis im Fenster bestätigt die Verbindung. Jeder fertige Download
 wandert automatisch in den Media Pool des offenen Projekts. Man kann mehrere Clips
 nacheinander laden; zum Beenden das Fenster schließen.
 
@@ -100,14 +100,21 @@ landen dann nur im gewählten Ordner, ohne Resolve-Import.
 
 ### Ablauf
 
+Links steht die **Quelle** (Link, Vorschau, Inhalt, Qualität, Zielordner), rechts die
+**Sammelmappe**: oben der Zettel mit der aktuellen Auswahl, darunter die abgelegten
+Ausschnitte, ganz unten der große Knopf. Über dem Knopf steht immer, was er gleich lädt.
+
 1. Link einfügen — oder auf das Fenster ziehen. Liegt beim Start ein Link in der
    Zwischenablage, steht er schon im Feld.
 2. **Analysieren**
-3. Vorschau abspielen, Ausschnitt setzen (Griffe ziehen, Zeiten tippen oder die
-   Tasten `I` und `O` an der Abspielposition). Beim Ziehen springt die Vorschau mit —
-   man sieht das Bild, an dem geschnitten wird.
+3. Vorschau abspielen, Ausschnitt setzen: Klammern in der Zeitleiste ziehen, Zeiten
+   tippen (auch mit Zehnteln, z. B. `1:36.4`) oder `I` und `O` an der Abspielposition.
+   Beim Ziehen springt die Vorschau mit — man sieht das Bild, an dem geschnitten wird.
+   Die Lupe schaltet zwischen „Auswahl im Detail“ und „Ganzes Video“.
 4. Inhalt und Qualität wählen
-5. **Herunterladen** — danach wird der Knopf zu **Fertig** und schließt das Fenster
+5. **Herunterladen** — rechts erscheint die Lieferliste mit jedem Auftrag; danach wird
+   der Knopf zu **Fertig** und schließt das Fenster. **Zurück zur Mappe** führt zum
+   Weitersammeln.
 
 Der Download läuft im Hintergrund weiter, wenn man das Fenster minimiert.
 
@@ -117,8 +124,8 @@ Manchmal braucht man nicht einen Ausschnitt, sondern zwei oder drei aus demselbe
 Video — den Anfang und das Ende zum Beispiel.
 
 1. Ersten Ausschnitt setzen wie gewohnt
-2. **+ Ausschnitt** drücken (oder Taste `M`) — er wandert auf die Liste unter dem Balken
-3. Nächste Stelle suchen, wieder **+ Ausschnitt**
+2. **Ablegen** drücken (oder Taste `M`) — er wandert als Zettel in die Sammelmappe
+3. Nächste Stelle suchen, wieder **Ablegen**
 4. **Herunterladen** — der Knopf heißt jetzt „3 Ausschnitte laden"
 
 Jede Stelle wird eine eigene Datei; der Zeitbereich steht im Dateinamen. Aus Resolve
@@ -129,24 +136,24 @@ Bis zu drei Ausschnitte werden **gleichzeitig** geladen. Das lohnt sich, weil di
 Plattformen jede einzelne Verbindung drosseln, nicht die Leitung: Drei Ausschnitte
 brauchen zusammen kaum länger als einer allein — gemessen 17 statt 42 Sekunden.
 
-Die gemerkten Stellen erscheinen als nummerierte Blöcke unter dem Balken. Ein Klick
-darauf — oder ein Doppelklick in der Liste — holt den Ausschnitt zum Nachbessern
-zurück. Solange etwas auf der Liste steht, wird sie geladen und nicht der gerade
-eingestellte Bereich.
+Die abgelegten Stellen erscheinen als blaue Marken in der Zeitleiste und als Zettel in
+der Mappe. Ein Klick darauf holt den Ausschnitt zum Nachbessern zurück, das ✕ (oder
+`Entf`) entfernt ihn. Solange etwas in der Mappe liegt, wird nur sie geladen — der
+Zettel sagt dann ausdrücklich, wenn die aktuelle Auswahl nicht dazugehört.
 
 ### Bibliothek
 
-Oben rechts führt **Bibliothek** zu allen Medien im aktuell gewählten Zielordner.
+In der Leiste links führt **Dateien** zur Bibliothek aller Medien im gewählten Zielordner.
 Unterordner werden mit durchsucht. Die Liste zeigt ein Vorschaubild, Name, Typ, Format,
-Datum und Dateigröße und lässt sich durchsuchen, filtern und sortieren. Ein Doppelklick
-öffnet die ausgewählte Datei. Wurde Fev Download aus Resolve gestartet, kann eine
+Datum und Dateigröße und lässt sich durchsuchen, filtern (Alle / Video / Ton, Zeitraum)
+und sortieren. Doppelklick oder Eingabetaste öffnet die ausgewählte Datei. Wurde Fev Download aus Resolve gestartet, kann eine
 vorhandene Datei mit **In Media Pool** an das offene Projekt übergeben werden.
 
 Die Vorschaubilder entstehen im Hintergrund und werden gemerkt — beim ersten Blick in
 einen vollen Ordner erscheinen sie nach und nach, danach sofort. Tonspuren zeigen ihr
 eingebettetes Titelbild, sofern eines vorhanden ist.
 
-Über **Ordner wechseln** lässt sich auch ein älterer Download-Ordner einlesen. Dieser
+Über das Ordner-Symbol lässt sich auch ein älterer Download-Ordner einlesen. Dieser
 Ordner wird zugleich zum neuen Ziel für weitere Downloads.
 
 ### Tastenkürzel
@@ -157,15 +164,17 @@ Ordner wird zugleich zum neuen Ziel für weitere Downloads.
 | `Strg` + `Enter` | Analysieren |
 | `I` | Anfang des Ausschnitts auf die Abspielposition |
 | `O` | Ende des Ausschnitts auf die Abspielposition |
-| `M` | Ausschnitt auf die Liste merken |
+| `M` | Ausschnitt in die Sammelmappe ablegen |
+| `←` / `→` | (Zeitleiste im Fokus) aktiven Griff um 1 s verschieben, mit `Umschalt` 10 s, mit `Alt` 0,1 s; `Leertaste` wechselt Anfang/Ende |
+| `Strg` + `K` | Menü mit allen Befehlen |
 | `Strg` + `O` | Zielordner wählen |
 | `Strg` + `L` | Bibliothek öffnen |
 | `Strg` + `Q` | Beenden |
 
-## Der Haken „H.264 für Resolve"
+## Der Schalter „H.264 für Resolve"
 
 YouTube liefert 1440p und 4K nur in den Formaten VP9 oder AV1 aus — **DaVinci
-Resolve kann beide nicht öffnen.** Ist der Haken gesetzt, wird notfalls nach H.264
+Resolve kann beide nicht öffnen.** Ist der Schalter an, wird notfalls nach H.264
 umgewandelt. Das dauert länger, dafür lässt sich die Datei sicher importieren.
 Bis einschließlich 1080p ist meist ohnehin H.264 verfügbar und es wird nichts
 umgewandelt.
@@ -245,7 +254,7 @@ Den Installer noch einmal ausführen. (Aus dem Quelltext heraus:
 `install_plugin.ps1`.)
 
 **Ein Video lässt sich nicht mehr laden**
-**Hilfe → Nach Aktualisierung suchen**, danach das Programm neu starten. Die
+**Menü → Nach Aktualisierung suchen**, danach das Programm neu starten. Die
 Plattformen ändern regelmäßig etwas; das behebt es in den meisten Fällen.
 
 **Die Vorschau braucht bei TikTok ein paar Sekunden**
@@ -253,7 +262,7 @@ Das ist so gewollt. Dort lässt sich nicht streamen, deshalb wird eine kleine Da
 geladen. Bei den üblichen kurzen Videos dauert das nur einen Moment.
 
 **Resolve lehnt die Datei ab**
-Der Codec passt nicht. Den Haken „H.264 für Resolve" gesetzt lassen und erneut laden.
+Der Codec passt nicht. Den Schalter „H.264 für Resolve" eingeschaltet lassen und erneut laden.
 
 **Etwas anderes**
 Das Protokoll steht in `%LOCALAPPDATA%\FevDownloader\launcher.log`.
@@ -289,7 +298,7 @@ des Projekts.
 powershell -ExecutionPolicy Bypass -File build_installer.ps1
 ```
 
-Ergibt `dist\FevDownloadSetup.exe` (rund 97 MB) — die eine Datei, die
+Ergibt `dist\FevDownloadSetup.exe` (mit beiliegenden Quellen rund 118 MB) — die eine Datei, die
 weitergegeben wird. Nötig sind dafür PyInstaller
 (`.venv\Scripts\python.exe -m pip install pyinstaller`) und
 [Inno Setup 6](https://jrsoftware.org/isdl.php).
@@ -322,7 +331,7 @@ decken Datenaustausch, Oberfläche, das Resolve-Script, Hochformat, mehrere
 Ausschnitte, TikTok-Metadaten ohne FPS, die Formatwahl der Vorschau, den Vorrang
 von yt-dlp-Fassungen, die Aktualisierung (GitHub, Installer, Fenster) und sauberes
 Beenden ab. Mit `-MitNetz`
-kommen fünf Testdateien dazu, die wirklich etwas laden. Der TikTok-Test prüft
+kommen sechs Testdateien dazu, die wirklich etwas laden. Der TikTok-Test prüft
 Vorschau, ganzen Clip, genauen Ausschnitt und reine Tonspur. Ein eigener Link
 lässt sich mit `python tests/test_tiktok_download.py "<TikTok-Link>"` prüfen.
 
@@ -334,7 +343,35 @@ $env:PYTHONPATH = "src"
 .venv\Scripts\python.exe -m fevdl.cli get "<link>" --mode video_audio --height 1080 --start 1:00 --end 1:30
 ```
 
-## Rechtliches
+## Rechtliches / Lizenzen
 
 Gedacht für eigene Inhalte oder Material, dessen Lizenz das Herunterladen erlaubt.
 Die Nutzungsbedingungen der jeweiligen Plattform gelten weiterhin.
+
+Der Installer enthält **FFmpeg/ffprobe 9.0 von gyan.dev unter GPLv3**
+(`--enable-gpl --enable-version3`). Der zugehörige FFmpeg-Quelltext wird als
+`licenses\ffmpeg\ffmpeg-9.0.tar.xz` direkt mitinstalliert, einschließlich
+Signatur, Original-Lizenztext, Hersteller-README, Baukonfiguration und Hashes.
+Zusätzlich liegen die belegten Quellen von x264, Xvid, Rubber Band und vid.stab
+bei. Der [offizielle 9.0-Quelltext](https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz)
+gehört zu Tag `n9.0`, Commit `d32b387f2b0a484599d4587d651891f0c63c4238`;
+der [historische gyan-Release](https://github.com/GyanD/codexffmpeg/releases/tag/9.0)
+ist weiterhin verfügbar. Der aktuelle gyan-Download 9.0.2 ersetzt diese Zuordnung nicht.
+
+`LIZENZEN.txt` und `licenses\ffmpeg\HINWEISE.txt` im Programmordner erklären
+Herkunft, weitere Bibliotheken und den Quellenbezug; bei fehlender Kopie kann
+über die [Projekt-Issues](https://github.com/fevzyy72/fev-download/issues) mit
+Fassung und ffmpeg-Hash Kontakt aufgenommen werden. Für die Einrichtung holt
+`powershell -NoProfile -ExecutionPolicy Bypass -File setup.ps1 -NurFfmpeg`
+die festgelegten Archive nach und prüft SHA-256. Der Bau stoppt bei fehlenden
+oder unpassenden Quellen und Originalhinweisen.
+
+**Die Lizenzprüfung bleibt offen:** Nicht alle statisch eingebauten Bibliotheken,
+Hersteller-Patches und Bauskripte sind vollständig belegt. Die beigefügten Archive
+und Links werden deshalb nicht als vollständige „Corresponding Source“ oder
+erfüllbares schriftliches GPL-Quellangebot ausgegeben. Auch bei Qt/PySide6 und
+curl bleiben Punkte offen, insbesondere das zusätzlich verpackte Qt Virtual
+Keyboard (GPLv3 oder kommerziell). Belegte Open-Source-Texte und zusätzliche
+Copyright-Hinweise liegen unter `licenses\qt` und `licenses\curl`.
+Vor weiterer Veröffentlichung sind die offenen Punkte in [SICHERHEIT.md](SICHERHEIT.md)
+zu klären. Keine Rechtsberatung und keine Vollständigkeitsgarantie.

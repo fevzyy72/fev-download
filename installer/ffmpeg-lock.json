@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "ffmpeg_version": "9.0",
+  "ffmpeg_commit": "d32b387f2b0a484599d4587d651891f0c63c4238",
+  "corresponding_source_complete": false,
+  "binary_prefix": "ffmpeg-9.0-essentials_build/bin/",
+  "binary_archive": {
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip",
+    "bytes": 111167378,
+    "sha256": "e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71"
+  },
+  "binaries": {
+    "ffmpeg.exe": {
+      "bytes": 102802944,
+      "sha256": "227af0691433b703ffc5725e47f7d06eefc34b4a72e7870e73d30e2cda483ecf"
+    },
+    "ffprobe.exe": {
+      "bytes": 102599168,
+      "sha256": "901f0efe4793cbb0f017101e3427f816e8fbf9a407bd585f49df30f4325cfd88"
+    }
+  },
+  "files": [
+    {
+      "path": "ffmpeg-9.0.tar.xz.asc",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz.asc",
+      "bytes": 520,
+      "sha256": "f9607bb4d90bbaeff196318a55547da66c9f5921dad39b1c49b7544286e4876c"
+    },
+    {
+      "path": "ffmpeg-devel.asc",
+      "url": "https://ffmpeg.org/ffmpeg-devel.asc",
+      "bytes": 1709,
+      "sha256": "397b3becedcd5a98769967ff1ff8501ddc89f8368b8f766e4701377d7dbaabe5"
+    },
+    {
+      "path": "ffmpeg-9.0.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz",
+      "bytes": 12032020,
+      "sha256": "7f607a00dd0d28a729d5a4811205812eef01cf6ef6155025febb6f36a9062d52"
+    },
+    {
+      "path": "xvidcore-1.3.7.tar.gz",
+      "url": "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz",
+      "bytes": 820854,
+      "sha256": "abbdcbd39555691dd1c9b4d08f0a031376a3b211652c0d8b3b8aa9be1303ce2d"
+    },
+    {
+      "path": "vidstab-8f5ce58.tar.gz",
+      "url": "https://github.com/georgmartius/vid.stab/archive/8f5ce5838982804c0869e33ddc4968a3ceeda40c.tar.gz",
+      "bytes": 154389,
+      "sha256": "d7cc70d0d761cacac2c21e63266a08c721b2045629a4b1c6d4ebc638afa77ed5"
+    },
+    {
+      "path": "rubberband-4.0.0.tar.gz",
+      "url": "https://github.com/breakfastquay/rubberband/archive/1d95888bec3ae0a17c0c4af791810d5a63f6bc35.tar.gz",
+      "bytes": 290593,
+      "sha256": "0d6fe8fcc54d8e0b7da1a67ebdb0129dd62f983ecbfb66650c65f977d46fe20f"
+    },
+    {
+      "path": "x264-0480cb0.tar.gz",
+      "url": "https://github.com/mirror/x264/archive/0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee.tar.gz",
+      "bytes": 1040667,
+      "sha256": "d0967a1348c85dfde363bb52610403be898171493100561efa0dd05d5fd1ae50"
+    },
+    {
+      "path": "GYAN-README.txt",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip",
+      "bytes": 41444,
+      "sha256": "eb44a453c699b7bc089dddf6b1d39b08beb8eb56180929d59218a90f7023e8dd",
+      "member": "ffmpeg-9.0-essentials_build/README.txt"
+    },
+    {
+      "path": "GYAN-LICENSE.txt",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip",
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "member": "ffmpeg-9.0-essentials_build/LICENSE"
+    }
+  ],
+  "required_notices": [
+    "ffmpeg/HINWEISE.txt",
+    "ffmpeg/BIBLIOTHEKEN.tsv",
+    "ffmpeg/BUILD.txt",
+    "HERKUNFT.json",
+    "qt/HINWEISE.txt",
+    "qt/LGPL-3.0-only.txt",
+    "qt/GPL-3.0-only.txt",
+    "curl/HINWEISE.txt"
+  ],
+  "notice_package_versions": {
+    "PySide6": "6.12.0",
+    "PySide6-Essentials": "6.12.0",
+    "PySide6-Addons": "6.12.0",
+    "shiboken6": "6.12.0",
+    "curl_cffi": "0.17.0",
+    "certifi": "2026.10.23"
+  }
+}

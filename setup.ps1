@@ -5,6 +5,9 @@
 # alles bleibt in diesem Ordner.
 #
 # Aufruf:  powershell -ExecutionPolicy Bypass -File setup.ps1
+# Nur den festgelegten ffmpeg-Build samt Quellen pruefen/nachladen: -NurFfmpeg.
+
+param([switch]$NurFfmpeg)
 
 $ErrorActionPreference = "Stop"
 
@@ -24,6 +27,16 @@ function Write-Ok($message) {
 
 function Write-Info($message) {
     Write-Host "    $message" -ForegroundColor Gray
+}
+
+if ($NurFfmpeg) {
+    $SourcePython = Join-Path $VenvDir "Scripts\python.exe"
+    if (-not (Test-Path -LiteralPath $SourcePython)) {
+        throw "Python-Umgebung fehlt. Zuerst setup.ps1 ohne -NurFfmpeg ausfuehren."
+    }
+    & $SourcePython (Join-Path $ProjectRoot "tools\ffmpeg_sources.py") --download --bootstrap
+    if ($LASTEXITCODE -ne 0) { throw "ffmpeg samt Quellen konnte nicht bereitgestellt werden." }
+    exit 0
 }
 
 # ---------------------------------------------------------------------------
@@ -86,6 +99,10 @@ $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 Write-Step "yt-dlp und PySide6 installieren (kann ein paar Minuten dauern)"
 
 & $VenvPython -m pip install --upgrade pip --quiet
+if ($LASTEXITCODE -ne 0) { throw "pip konnte nicht aktualisiert werden." }
+# GHSA-xmj3-9gf7-h52w betrifft alte Windows-Wheel-Installationen.
+& $VenvPython -m pip install --upgrade 'setuptools>=84.1.0' --quiet
+if ($LASTEXITCODE -ne 0) { throw "setuptools konnte nicht aktualisiert werden." }
 & $VenvPython -m pip install -r $Requirements --upgrade
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installation der Pakete fehlgeschlagen." -ForegroundColor Red
@@ -98,48 +115,13 @@ Write-Ok "Pakete installiert."
 # ---------------------------------------------------------------------------
 Write-Step "ffmpeg bereitstellen"
 
-$FfmpegExe  = Join-Path $BinDir "ffmpeg.exe"
-$FfprobeExe = Join-Path $BinDir "ffprobe.exe"
-
-if ((Test-Path $FfmpegExe) -and (Test-Path $FfprobeExe)) {
-    Write-Ok "Bereits vorhanden in bin/"
-} else {
-    if (-not (Test-Path $BinDir)) {
-        New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
-    }
-
-    $ZipUrl  = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-    $ZipPath = Join-Path $env:TEMP "ffmpeg-fevdl.zip"
-    $Extract = Join-Path $env:TEMP "ffmpeg-fevdl-extract"
-
-    Write-Info "Lade herunter von gyan.dev (ca. 30 MB)..."
-    $previousProgress = $ProgressPreference
-    $ProgressPreference = "SilentlyContinue"   # sonst extrem langsam
-    try {
-        Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
-    } finally {
-        $ProgressPreference = $previousProgress
-    }
-
-    Write-Info "Entpacke..."
-    if (Test-Path $Extract) {
-        Remove-Item $Extract -Recurse -Force
-    }
-    Expand-Archive -Path $ZipPath -DestinationPath $Extract -Force
-
-    foreach ($name in @("ffmpeg.exe", "ffprobe.exe")) {
-        $found = Get-ChildItem -Path $Extract -Filter $name -Recurse -File | Select-Object -First 1
-        if (-not $found) {
-            Write-Host "$name wurde im Archiv nicht gefunden." -ForegroundColor Red
-            exit 1
-        }
-        Copy-Item $found.FullName -Destination (Join-Path $BinDir $name) -Force
-    }
-
-    Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
-    Remove-Item $Extract -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Ok "ffmpeg.exe und ffprobe.exe liegen nun in bin/"
-}
+# Feste Fassung statt beweglichem "release"-Link: Binaerdateien und Quellen
+# werden gemeinsam mit installer/ffmpeg-lock.json geprueft. Ein anderer Build
+# wird niemals stillschweigend mit den Quellen von 9.0 kombiniert.
+$FfmpegExe = Join-Path $BinDir "ffmpeg.exe"
+& $VenvPython (Join-Path $ProjectRoot "tools\ffmpeg_sources.py") --download --bootstrap
+if ($LASTEXITCODE -ne 0) { throw "ffmpeg samt Quellen konnte nicht bereitgestellt werden." }
+Write-Ok "ffmpeg 9.0 samt Quellen und Originalhinweisen liegt bereit."
 
 # ---------------------------------------------------------------------------
 # 5. Programmsymbol erzeugen

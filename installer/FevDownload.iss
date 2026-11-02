@@ -15,7 +15,7 @@
 ; Scripts-Ordner liegt ohnehin unter %APPDATA% des jeweiligen Benutzers.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #error AppVersion fehlt. Bitte build_installer.ps1 verwenden.
 #endif
 
 #define AppName        "Fev Download"
@@ -68,14 +68,20 @@ Name: "desktopicon"; Description: "Verknuepfung auf dem Desktop anlegen"; GroupD
 
 [Files]
 ; Das gepackte Programm samt Python, Qt und yt-dlp.
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "\licenses\*,\LIZENZEN.txt"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Quellen und Originalhinweise sind Pflichtdateien, kein optionaler Download.
+; Inno protokolliert jede installierte Datei fuer die normale Deinstallation;
+; kein pauschales filesandordirs-Loeschen von Nutzerdateien noetig.
+#if !FileExists(SourceDir + "\licenses\ffmpeg\ffmpeg-9.0.tar.xz")
+  #error ffmpeg-Quellarchiv fehlt. setup.ps1 -NurFfmpeg und build_installer.ps1 ausfuehren.
+#endif
+Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ffmpeg und ffprobe kommen NEBEN die .exe, nicht ins Paket - paths.py sucht
 ; sie im Ordner der .exe.
-Source: "{#ProjectDir}\bin\ffmpeg.exe";  DestDir: "{app}\bin"; Flags: ignoreversion
-Source: "{#ProjectDir}\bin\ffprobe.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
-
-Source: "{#ProjectDir}\assets\fevdl.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+; bin/ und assets/ liegen schon im frisch geprueften SourceDir; die rekursive
+; Zeile oben nimmt auch neue Symbole, Logos und Lizenzdateien automatisch mit.
 
 ; Das Script fuer Resolve. Liegt zusaetzlich im Programmordner, damit es sich
 ; nach einer Resolve-Neuinstallation von Hand wiederherstellen laesst.
@@ -84,8 +90,7 @@ Source: "{#ProjectDir}\resolve\FevDownloader.py"; DestDir: "{userappdata}\Blackm
 
 Source: "{#ProjectDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
-; Lizenzen der fremden Bestandteile - vor allem ffmpeg ist ein GPLv3-Build und
-; darf nur mit diesem Hinweis weitergegeben werden.
+; Lizenzuebersicht; ffmpeg-Quellen/Hinweise kommen aus SourceDir\licenses mit.
 Source: "LIZENZEN.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -137,6 +142,7 @@ begin
 
   EscapedPath := ExpandConstant('{app}');
   StringChangeEx(EscapedPath, '\', '\\', True);
+  StringChangeEx(EscapedPath, '"', '\"', True);
 
   JsonPath := AppDir + '\install.json';
   Json :=
@@ -148,7 +154,7 @@ begin
 
   { Keine Zeile darf mit '#' beginnen - der Praeprozessor haelt sie sonst fuer
     eine Direktive und bricht ab. Zeilenumbrueche deshalb ans Zeilenende. }
-  if not SaveStringToFile(JsonPath, Json, False) then
+  if not SaveStringToFile(JsonPath, UTF8Encode(Json), False) then
   begin
     Message := 'Die Datei install.json konnte nicht geschrieben werden:' + #13#10;
     Message := Message + JsonPath + #13#10 + #13#10;
@@ -199,5 +205,9 @@ begin
     end;
     { Nachgeladenes yt-dlp gehoert zur Installation und geht immer mit. }
     DelTree(AppDir + '\ytdlp', True, True, True);
+    DelTree(AppDir + '\ytdlp.neu', True, True, True);
+    DelTree(AppDir + '\ytdlp.alt', True, True, True);
+    DeleteFile(AppDir + '\ytdlp.whl');
+    DeleteFile(AppDir + '\selbsttest.txt');
   end;
 end;

@@ -16,13 +16,12 @@ import math
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QSizePolicy,
     QSlider,
     QStackedWidget,
@@ -31,9 +30,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import format_timecode
-from . import typography
+from . import style, typography
+from .widgets import IconButton
 
-STAGE_COLOR = QColor("#141414")
+STAGE_COLOR = QColor(style.STAGE)
 
 
 class _AspectStage(QWidget):
@@ -49,12 +49,18 @@ class _AspectStage(QWidget):
         self._stack = stack
         self._stack.setParent(self)
         self._aspect = 16 / 9
-        self.setMinimumHeight(240)
+        self.setMinimumHeight(170)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._stack.currentChanged.connect(self._fit_video)
 
     def sizeHint(self) -> QSize:
         return QSize(480, 270)
+
+    def paintEvent(self, event) -> None:
+        # Die ganze Flaeche ist die Buehne: Balken neben Hoch- oder
+        # Querformat bleiben dunkel, das Bild "schwebt" nicht im Creme.
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), STAGE_COLOR)
 
     def set_aspect(self, aspect: float) -> None:
         self._aspect = aspect
@@ -119,6 +125,7 @@ class PreviewPlayer(QWidget):
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setWordWrap(True)
         self._placeholder.setObjectName("placeholder")
+        self._placeholder.setFont(typography.body(14))
 
         self._stack = QStackedWidget(self)
         self._stack.addWidget(self._placeholder)
@@ -126,9 +133,7 @@ class PreviewPlayer(QWidget):
         self._stack.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self._stage = _AspectStage(self._stack, self)
 
-        self._play_button = QPushButton("Abspielen")
-        self._play_button.setObjectName("quiet")
-        self._play_button.setFixedWidth(96)
+        self._play_button = IconButton("play", "Abspielen", self)
         self._play_button.setEnabled(False)
         self._play_button.clicked.connect(self.toggle_play)
 
@@ -136,22 +141,26 @@ class PreviewPlayer(QWidget):
         self._position_slider.setRange(0, 0)
         self._position_slider.setEnabled(False)
         self._position_slider.sliderMoved.connect(self._on_slider_moved)
+        self._position_slider.setAccessibleName("Vorschau spulen")
+        self._position_slider.setFocusPolicy(Qt.TabFocus)
+        self._position_slider.setCursor(Qt.PointingHandCursor)
 
         self._time_label = QLabel("0:00 / 0:00")
         self._time_label.setObjectName("muted")
-        self._time_label.setFont(typography.mono())
-        self._time_label.setMinimumWidth(104)
+        self._time_label.setFont(typography.mono(12))
+        self._time_label.setMinimumWidth(96)
         self._time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(10)
         controls.addWidget(self._play_button)
         controls.addWidget(self._position_slider, 1)
         controls.addWidget(self._time_label)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         layout.addWidget(self._stage, 1)
         layout.addLayout(controls)
 
@@ -164,6 +173,9 @@ class PreviewPlayer(QWidget):
         self._video.videoSink().videoSizeChanged.connect(self._on_video_size_changed)
 
         self._fallback_duration = 0.0
+        # Ausschnitt (ms), der gerade in Schleife laeuft: (Anfang, Ende) oder None.
+        self._loop_range = None
+        self._player.mediaStatusChanged.connect(self._on_media_status)
 
     # -- Bildformat ---------------------------------------------------------
 
@@ -226,8 +238,13 @@ class PreviewPlayer(QWidget):
         self._set_time_label(0.0, self._fallback_duration)
 
     def stop(self) -> None:
+        self._loop_range = None
         self._player.stop()
         self._player.setSource(QUrl())
+
+    def can_play(self) -> bool:
+        """True, wenn eine abspielbare Vorschau geladen ist."""
+        return self._play_button.isEnabled()
 
     def toggle_play(self) -> None:
         if self._player.playbackState() == QMediaPlayer.PlayingState:
@@ -239,7 +256,25 @@ class PreviewPlayer(QWidget):
         self._player.pause()
 
     def seek(self, seconds: float) -> None:
+        # Wer selbst springt, verlaesst die Schleife.
+        self._loop_range = None
         self._player.setPosition(int(seconds * 1000))
+
+    def loop_range(self, start: float, end: float) -> None:
+        """
+        Spielt den Bereich start..end in Dauerschleife.
+
+        Am Ende springt der Player zurueck zum Anfang. Die Schleife endet, sobald
+        man anhaelt (Leertaste, Pause) oder selbst im Video springt.
+        """
+        if not self.can_play() or end <= start:
+            return
+        self._loop_range = (int(start * 1000), int(end * 1000))
+        self._player.setPosition(int(start * 1000))
+        self._player.play()
+
+    def is_looping(self) -> bool:
+        return self._loop_range is not None
 
     def position(self) -> float:
         return self._player.position() / 1000.0
@@ -247,9 +282,15 @@ class PreviewPlayer(QWidget):
     # -- Rueckmeldungen des Players -----------------------------------------
 
     def _on_slider_moved(self, value: int) -> None:
+        self._loop_range = None
         self._player.setPosition(value)
 
     def _on_position_changed(self, milliseconds: int) -> None:
+        if self._loop_range is not None and milliseconds >= self._loop_range[1]:
+            # Ende erreicht: zurueck zum Anfang des Ausschnitts, weiterspielen.
+            start_ms = self._loop_range[0]
+            self._player.setPosition(start_ms)
+            milliseconds = start_ms
         if not self._position_slider.isSliderDown():
             self._position_slider.setValue(milliseconds)
         seconds = milliseconds / 1000.0
@@ -261,9 +302,25 @@ class PreviewPlayer(QWidget):
         if milliseconds > 0:
             self.durationResolved.emit(milliseconds / 1000.0)
 
+    def _on_media_status(self, status) -> None:
+        # Endet der Ausschnitt mit dem Video selbst, kommt kein Positionswert
+        # hinter dem Ende - dann hilft nur dieser Weg zurueck an den Anfang.
+        if status == QMediaPlayer.EndOfMedia and self._loop_range is not None:
+            self._player.setPosition(self._loop_range[0])
+            self._player.play()
+
     def _on_state_changed(self, state) -> None:
+        # Anhalten beendet die Schleife. Eine verspaetete Meldung eines
+        # frueheren Anhaltens darf sie nicht beenden: Entscheidend ist, ob der
+        # Player jetzt wirklich steht.
+        if (
+            state == QMediaPlayer.PausedState
+            and self._player.playbackState() == QMediaPlayer.PausedState
+        ):
+            self._loop_range = None
         playing = state == QMediaPlayer.PlayingState
         self._play_button.setText("Pause" if playing else "Abspielen")
+        self._play_button.set_icon("pause" if playing else "play")
 
     def _on_error(self, error, error_string: str) -> None:
         if error == QMediaPlayer.NoError or self._reported_failure:

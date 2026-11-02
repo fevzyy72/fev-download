@@ -1,32 +1,45 @@
-"""Das Hauptfenster des FevDownloaders."""
+"""Das Hauptfenster des FevDownloaders - Gestaltung "Sammelmappe".
+
+Aufbau:
+
+    Leiste      Logo, Reiter "Sammeln" / "Dateien", Menuesymbol (Strg+K)
+    Quelle      Link, Vorschau mit allem freien Platz, Titel, Inhalt, Qualitaet,
+                H.264-Schalter, Zielordner
+    Mappe       der Zettel mit der aktuellen Auswahl (Zeitleiste, Von/Bis,
+                I/O/Ganzes Video, Ablegen), die abgelegten Ausschnitte und unten
+                die grosse Hauptaktion. Beim Laden wird daraus die Lieferliste.
+
+Vor der ersten Analyse zeigt die Seite nur den grossen Link-Einstieg.
+
+Die Logik (Analyse, Vorschau-Ausweichdatei, mehrere Ausschnitte parallel,
+Resolve-Rueckmeldung, Einstellungen) ist dieselbe wie vorher; neu ist das
+Aussehen. Die Bedienelemente stehen in widgets.py und trim_bar.py.
+"""
 
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QElapsedTimer, QSettings, Qt, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPixmap
+from PySide6.QtCore import QElapsedTimer, QPoint, QRectF, QSettings, Qt, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QApplication,
-    QCheckBox,
-    QComboBox,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
-    QProgressBar,
     QProgressDialog,
-    QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -45,11 +58,28 @@ from ..core.models import (
 from ..core.probe import pick_height
 from ..ipc import Job, ResultWriter
 from . import typography
+from .icons import draw_logo
 from .library_page import LibraryPage
 from .preview_player import PreviewPlayer
 from .style import STYLESHEET
-from .trim_bar import TrimBar
+from .trim_bar import TrimBar, precise_timecode
+from .widgets import (
+    BusyLine,
+    ChoiceGroup,
+    DeliveryList,
+    IconButton,
+    JobRow,
+    LogoMark,
+    MainAction,
+    NavButton,
+    Rule,
+    SegmentList,
+    TextButton,
+    ToggleSwitch,
+    fade_in,
+)
 from .worker import (
+    MAX_PARALLEL,
     AppUpdateWorker,
     DownloadWorker,
     PreviewWorker,
@@ -59,6 +89,37 @@ from .worker import (
     WaveformWorker,
     start_startup_check,
 )
+
+# Kurze Namen fuer die Medienkarten; der volle Name steht im Tooltip.
+MODE_CARDS = (
+    (Mode.VIDEO_AUDIO, "Video + Ton", "video"),
+    (Mode.AUDIO_ONLY, "Nur Ton", "audio"),
+    (Mode.VIDEO_ONLY, "Nur Video", "video"),
+)
+
+COLLECTION_WIDE = 420
+COLLECTION_NARROW = 380
+COMPACT_HEIGHT = 840  # darunter werden die Medienkarten flach
+
+
+def logo_pixmap(size: int) -> QPixmap:
+    """Logo als Bild - nur nach dem Start der Anwendung aufrufen."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    draw_logo(painter, QRectF(0, 0, size, size))
+    painter.end()
+    return pixmap
+
+
+def _label(text: str = "", name: str = "", font=None, wrap: bool = False) -> QLabel:
+    label = QLabel(text)
+    if name:
+        label.setObjectName(name)
+    if font is not None:
+        label.setFont(font)
+    label.setWordWrap(wrap)
+    return label
 
 
 class MainWindow(QMainWindow):
@@ -85,9 +146,12 @@ class MainWindow(QMainWindow):
         # Nach einem fertigen Download wird aus dem Knopf ein Abschluss-Knopf,
         # damit man nicht versehentlich dasselbe noch einmal laedt.
         self._completed = False
+        self._running = False
+        self._job_rows: list[JobRow] = []
+        self._parts_done = 0
 
         # Gemerkte Stellen desselben Videos, jeweils (Anfang, Ende) in Sekunden.
-        # Ist die Liste gefuellt, wird sie geladen und nicht der Balken.
+        # Ist die Liste gefuellt, wird sie geladen und nicht der Zettel.
         self._segments: list[tuple[float, float]] = []
         self._finished_files: list[Path] = []
         # Beim Ziehen eines Griffs wird das Spulen gedrosselt - sonst bekommt
@@ -108,13 +172,14 @@ class MainWindow(QMainWindow):
 
         self._settings = QSettings("fezco", "Fev Download")
 
-        self._build_menu()
+        self._build_actions()
         self._build_ui()
         self._connect_signals()
         self._restore_settings()
         self._apply_job()
         self._prefill_from_clipboard()
         self._set_state_idle()
+        self._update_plan()
 
     # ------------------------------------------------------------------
     # Gemerkte Einstellungen
@@ -145,18 +210,13 @@ class MainWindow(QMainWindow):
             self._size_to_screen()
 
     def _size_to_screen(self) -> None:
-        """
-        Beim ersten Start das Fenster gross oeffnen.
-
-        Ein festes Mass waere entweder auf grossen Bildschirmen verschenkt oder
-        auf kleinen zu gross. Darum richtet es sich nach dem verfuegbaren Platz.
-        """
+        """Beim ersten Start 1000 x 960 - oder so viel, wie der Bildschirm hergibt."""
         screen = QApplication.primaryScreen()
         if screen is None:
             return
         available = screen.availableGeometry()
-        width = min(1180, int(available.width() * 0.72))
-        height = int(available.height() * 0.94)
+        width = min(1000, available.width() - 40)
+        height = min(960, available.height() - 40)
         self.resize(max(self.minimumWidth(), width), max(self.minimumHeight(), height))
         frame = self.frameGeometry()
         frame.moveCenter(available.center())
@@ -196,7 +256,8 @@ class MainWindow(QMainWindow):
     def _apply_job(self) -> None:
         """Uebernimmt die Vorgaben aus Resolve, sofern von dort gestartet."""
         if self._job is None:
-            self.banner_container.setVisible(False)
+            self.resolve_banner.setVisible(False)
+            self.resolve_note.setVisible(False)
             return
 
         # Ein selbst gewaehlter Zielordner hat Vorrang vor der Vorgabe aus
@@ -209,133 +270,84 @@ class MainWindow(QMainWindow):
             f"Mit DaVinci Resolve verbunden  ·  Projekt „{project}“  ·  "
             "fertige Clips landen automatisch im Media Pool"
         )
-        self.banner_container.setVisible(True)
+        self.resolve_note.setText(f"Resolve  ·  Projekt „{project}“  ·  fertige Clips landen im Media Pool")
+        self.resolve_banner.setVisible(True)
+        self.resolve_note.setVisible(True)
 
     # ------------------------------------------------------------------
-    # Menue
+    # Befehle (Menue hinter dem Symbol, Tastenkuerzel am Fenster)
     # ------------------------------------------------------------------
 
-    def _build_menu(self) -> None:
-        menu = self.menuBar()
+    def _action(self, text: str, slot, shortcut: str = "") -> QAction:
+        action = QAction(text, self)
+        if shortcut:
+            action.setShortcut(QKeySequence(shortcut))
+        action.triggered.connect(slot)
+        # Ohne Menueleiste muessen die Aktionen am Fenster haengen, sonst
+        # greifen ihre Kuerzel nicht.
+        self.addAction(action)
+        return action
 
-        file_menu = menu.addMenu("&Datei")
+    def _build_actions(self) -> None:
+        self.action_paste = self._action("Link aus Zwischenablage", self._paste_from_clipboard, "Ctrl+V")
+        self.action_analyse = self._action("Analysieren", self._start_probe, "Ctrl+Return")
+        self.action_choose_dir = self._action("Zielordner waehlen...", self._choose_output_dir, "Ctrl+O")
+        self.action_open_dir = self._action("Zielordner oeffnen", self._open_output_dir)
+        self.action_library = self._action("Bibliothek", self._show_library, "Ctrl+L")
+        self.action_quit = self._action("Beenden", self.close, "Ctrl+Q")
 
-        self.action_paste = QAction("Link aus Zwischenablage", self)
-        self.action_paste.setShortcut(QKeySequence("Ctrl+V"))
-        self.action_paste.triggered.connect(self._paste_from_clipboard)
-        file_menu.addAction(self.action_paste)
+        self.action_mark_in = self._action("Anfang auf Abspielposition", self._set_start_from_playhead, "I")
+        self.action_mark_out = self._action("Ende auf Abspielposition", self._set_end_from_playhead, "O")
+        self.action_play = self._action("Abspielen / Pause", self._toggle_playback, "Space")
+        self.action_add_segment = self._action("Ausschnitt ablegen", self._add_segment, "M")
+        self.action_clear_segments = self._action("Gemerkte Ausschnitte verwerfen", self._clear_segments)
+        self.action_reset_trim = self._action("Ganzes Video", self._reset_trim)
 
-        self.action_analyse = QAction("Analysieren", self)
-        self.action_analyse.setShortcut(QKeySequence("Ctrl+Return"))
-        self.action_analyse.triggered.connect(self._start_probe)
-        file_menu.addAction(self.action_analyse)
+        self.action_update_ytdlp = self._action("Nach Aktualisierung suchen", self._check_updates)
+        self.action_about = self._action("Ueber Fev Download", self._show_about)
+        self.action_menu = self._action("Menue", self._show_menu, "Ctrl+K")
 
-        file_menu.addSeparator()
+        menu = QMenu(self)
+        for action in (self.action_paste, self.action_analyse):
+            menu.addAction(action)
+        menu.addSeparator()
+        for action in (self.action_choose_dir, self.action_open_dir, self.action_library):
+            menu.addAction(action)
+        menu.addSeparator()
+        for action in (self.action_mark_in, self.action_mark_out, self.action_add_segment,
+                       self.action_reset_trim, self.action_clear_segments):
+            menu.addAction(action)
+        menu.addSeparator()
+        menu.addAction(self.action_update_ytdlp)
+        menu.addAction(self.action_about)
+        menu.addSeparator()
+        menu.addAction(self.action_quit)
+        self.main_menu = menu
 
-        self.action_choose_dir = QAction("Zielordner waehlen...", self)
-        self.action_choose_dir.setShortcut(QKeySequence("Ctrl+O"))
-        self.action_choose_dir.triggered.connect(self._choose_output_dir)
-        file_menu.addAction(self.action_choose_dir)
-
-        self.action_open_dir = QAction("Zielordner oeffnen", self)
-        self.action_open_dir.triggered.connect(self._open_output_dir)
-        file_menu.addAction(self.action_open_dir)
-
-        self.action_library = QAction("Bibliothek", self)
-        self.action_library.setShortcut(QKeySequence("Ctrl+L"))
-        self.action_library.triggered.connect(self._show_library)
-        file_menu.addAction(self.action_library)
-
-        file_menu.addSeparator()
-
-        action_quit = QAction("Beenden", self)
-        action_quit.setShortcut(QKeySequence("Ctrl+Q"))
-        action_quit.triggered.connect(self.close)
-        file_menu.addAction(action_quit)
-
-        edit_menu = menu.addMenu("&Ausschnitt")
-
-        self.action_mark_in = QAction("Anfang auf Abspielposition", self)
-        self.action_mark_in.setShortcut(QKeySequence("I"))
-        self.action_mark_in.triggered.connect(self._set_start_from_playhead)
-        edit_menu.addAction(self.action_mark_in)
-
-        self.action_mark_out = QAction("Ende auf Abspielposition", self)
-        self.action_mark_out.setShortcut(QKeySequence("O"))
-        self.action_mark_out.triggered.connect(self._set_end_from_playhead)
-        edit_menu.addAction(self.action_mark_out)
-
-        edit_menu.addSeparator()
-
-        self.action_add_segment = QAction("Ausschnitt merken", self)
-        self.action_add_segment.setShortcut(QKeySequence("M"))
-        self.action_add_segment.triggered.connect(self._add_segment)
-        edit_menu.addAction(self.action_add_segment)
-
-        self.action_clear_segments = QAction("Gemerkte Ausschnitte verwerfen", self)
-        self.action_clear_segments.triggered.connect(self._clear_segments)
-        edit_menu.addAction(self.action_clear_segments)
-
-        edit_menu.addSeparator()
-
-        self.action_reset_trim = QAction("Ganzes Video", self)
-        self.action_reset_trim.triggered.connect(self._reset_trim)
-        edit_menu.addAction(self.action_reset_trim)
-
-        help_menu = menu.addMenu("&Hilfe")
-
-        self.action_update_ytdlp = QAction("Nach Aktualisierung suchen", self)
-        self.action_update_ytdlp.triggered.connect(self._check_updates)
-        help_menu.addAction(self.action_update_ytdlp)
-
-        help_menu.addSeparator()
-
-        action_about = QAction("Ueber Fev Download", self)
-        action_about.triggered.connect(self._show_about)
-        help_menu.addAction(action_about)
+    def _show_menu(self) -> None:
+        button = self.menu_button
+        size = self.main_menu.sizeHint()
+        pos = button.mapToGlobal(QPoint(button.width() + 6, button.height() - size.height()))
+        self.main_menu.popup(pos)
 
     # ------------------------------------------------------------------
     # Aufbau
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        # Der Inhalt steckt in einem Rollbereich, damit auf kleinen
-        # Bildschirmen nichts abgeschnitten wird. Die Fusszeile bleibt
-        # bewusst ausserhalb - der Download-Knopf soll immer sichtbar sein,
-        # ohne dass man erst scrollen muss.
-        content = QWidget()
+        central = QWidget()
+        central.setObjectName("page")
+        row = QHBoxLayout(central)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        row.addWidget(self._build_nav_rail())
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setWidget(content)
+        self._build_source_editor()
 
-        root = QVBoxLayout(content)
-        root.setContentsMargins(44, 26, 44, 22)
-        root.setSpacing(0)
-
-        root.addWidget(self._build_header())
-        root.addSpacing(14)
-        root.addWidget(self._build_rule())
-        root.addSpacing(14)
-        root.addWidget(self._build_resolve_banner())
-        root.addLayout(self._build_link_row())
-        root.addSpacing(10)
-        root.addWidget(self._build_info_card())
-        root.addSpacing(12)
-        root.addWidget(self._build_preview_section(), 1)
-        root.addSpacing(12)
-        root.addWidget(self._build_trim_section())
-        root.addSpacing(10)
-        root.addWidget(self._build_options_section())
-
-        download_page = QWidget()
-        outer = QVBoxLayout(download_page)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        outer.addWidget(scroll, 1)
-        outer.addWidget(self._build_footer())
+        self.download_stack = QStackedWidget()
+        self.download_stack.addWidget(self._build_empty_view())
+        self.download_stack.addWidget(self._build_work_view())
+        self._place_source_editor(compact=False)
 
         self.library_page = LibraryPage(
             root_provider=self._library_root,
@@ -343,347 +355,481 @@ class MainWindow(QMainWindow):
         )
 
         self.pages = QStackedWidget()
-        self.pages.addWidget(download_page)
+        self.pages.addWidget(self.download_stack)
         self.pages.addWidget(self.library_page)
-        self.setCentralWidget(self.pages)
+        row.addWidget(self.pages, 1)
+        self.setCentralWidget(central)
 
-    def _build_header(self) -> QWidget:
-        container = QWidget()
+    def _build_nav_rail(self) -> QWidget:
+        rail = QWidget()
+        rail.setObjectName("navRail")
+        rail.setAttribute(Qt.WA_StyledBackground, True)
+        rail.setFixedWidth(65)
 
-        hero = QLabel("Fev Download")
-        hero.setObjectName("hero")
-        hero.setFont(typography.hero())
+        self.download_nav_button = NavButton("mark", "Sammeln")
+        self.download_nav_button.setToolTip("Video sammeln und laden")
+        self.download_nav_button.setChecked(True)
+        self.library_nav_button = NavButton("library", "Dateien")
+        self.library_nav_button.setToolTip("Bibliothek der geladenen Dateien  ·  Strg+L")
+        self.menu_button = IconButton("menu", "Menue", tooltip="Alle Befehle  ·  Strg+K")
 
-        subtitle = QLabel("Laden, zuschneiden, ab nach DaVinci Resolve.")
-        subtitle.setObjectName("subtitle")
-
-        self.download_nav_button = QPushButton("Download")
-        self.download_nav_button.setObjectName("navActive")
-        self.library_nav_button = QPushButton("Bibliothek")
-        self.library_nav_button.setObjectName("nav")
-
-        # Nebeneinander statt untereinander: Der Kopf braucht nur eine Zeile,
-        # der gewonnene Platz gehoert der Vorschau.
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
-        layout.addWidget(hero, 0, Qt.AlignBottom)
-        layout.addWidget(subtitle, 0, Qt.AlignBottom)
+        layout = QVBoxLayout(rail)
+        layout.setContentsMargins(6, 18, 6, 15)
+        layout.setSpacing(12)
+        layout.addWidget(LogoMark(32), 0, Qt.AlignHCenter)
+        layout.addSpacing(26)
+        layout.addWidget(self.download_nav_button, 0, Qt.AlignHCenter)
+        layout.addWidget(self.library_nav_button, 0, Qt.AlignHCenter)
         layout.addStretch(1)
-        layout.addWidget(self.download_nav_button)
-        layout.addWidget(self.library_nav_button)
-        return container
+        layout.addWidget(self.menu_button, 0, Qt.AlignHCenter)
+        return rail
 
-    def _build_rule(self) -> QFrame:
-        rule = QFrame()
-        rule.setObjectName("rule")
-        rule.setFrameShape(QFrame.HLine)
-        rule.setFixedHeight(1)
-        return rule
+    # -- Link-Eingabe (wandert vom Einstieg in die Quelle) ---------------
 
-    def _build_resolve_banner(self) -> QWidget:
-        # Der Streifen sitzt in einer eigenen Huelle: Wird die ausgeblendet,
-        # verschwindet auch ihr Abstand. Ein blosses Ausblenden des Textes
-        # wuerde eine Luecke hinterlassen.
-        self.banner_container = QWidget()
-        self.resolve_banner = QLabel()
-        self.resolve_banner.setObjectName("banner")
-        self.resolve_banner.setWordWrap(True)
-
-        layout = QVBoxLayout(self.banner_container)
-        layout.setContentsMargins(0, 0, 0, 12)
-        layout.setSpacing(0)
-        layout.addWidget(self.resolve_banner)
-
-        self.banner_container.setVisible(False)
-        return self.banner_container
-
-    def _eyebrow(self, text: str) -> QLabel:
-        label = QLabel(text.upper())
-        label.setObjectName("eyebrow")
-        label.setFont(typography.eyebrow())
-        return label
-
-    def _build_link_row(self) -> QHBoxLayout:
+    def _build_source_editor(self) -> None:
         self.url_edit = QLineEdit()
-        self.url_edit.setPlaceholderText(
-            "Link einfuegen - YouTube, Vimeo, TikTok, Twitch und weitere"
-        )
-        self.url_edit.setClearButtonEnabled(True)
+        self.url_edit.setPlaceholderText("Videolink einfuegen oder hier ablegen")
+        self.url_edit.setAccessibleName("Videolink")
+        self.url_edit.setToolTip("YouTube, Vimeo, TikTok, Twitch und ueber tausend weitere Seiten")
 
-        self.analyse_button = QPushButton("Analysieren")
-        self.analyse_button.setObjectName("primary")
-        self.analyse_button.setMinimumWidth(124)
+        self.paste_button = IconButton("paste", "Link einfuegen", tooltip="Strg+V")
+        self.clear_link_button = IconButton("close", "Link leeren")
+        self.analyse_button = TextButton("Analysieren", "arrow", variant="accent", height=44)
+        self.analyse_button.setToolTip("Link pruefen und Vorschau laden  ·  Eingabetaste")
+        self.analyse_busy = BusyLine()
+
+        self.source_editor = QWidget()
+        self._source_grid = QGridLayout(self.source_editor)
+        self._source_grid.setContentsMargins(0, 0, 0, 0)
+        self._source_grid.setHorizontalSpacing(4)
+        self._source_grid.setVerticalSpacing(8)
+
+    def _place_source_editor(self, compact: bool) -> None:
+        """Gross im Einstieg, als schmale Zeile ueber der Vorschau."""
+        grid = self._source_grid
+        for widget in (self.url_edit, self.analyse_busy, self.paste_button,
+                       self.clear_link_button, self.analyse_button):
+            grid.removeWidget(widget)
+        for column in range(5):
+            grid.setColumnStretch(column, 0)
+        if compact:
+            self.url_edit.setObjectName("linkEdit")
+            self.analyse_button.setFixedHeight(36)
+            # Neben der Vorschau ist Analysieren eine Nebensache - das Blau
+            # gehoert dort allein der Hauptaktion.
+            self.analyse_button.set_variant("outline")
+            grid.addWidget(self.url_edit, 0, 0)
+            grid.addWidget(self.paste_button, 0, 1)
+            grid.addWidget(self.clear_link_button, 0, 2)
+            grid.addWidget(self.analyse_button, 0, 3)
+            grid.addWidget(self.analyse_busy, 1, 0, 1, 4)
+            grid.setVerticalSpacing(0)
+            grid.setColumnStretch(0, 1)
+            self._source_slot_work.addWidget(self.source_editor)
+        else:
+            self.url_edit.setObjectName("linkHero")
+            self.analyse_button.setFixedHeight(44)
+            self.analyse_button.set_variant("accent")
+            grid.addWidget(self.url_edit, 0, 0, 1, 4)
+            grid.addWidget(self.analyse_busy, 1, 0, 1, 4)
+            grid.addWidget(self.paste_button, 2, 0)
+            grid.addWidget(self.clear_link_button, 2, 1)
+            grid.addWidget(self.analyse_button, 2, 3)
+            grid.setVerticalSpacing(6)
+            grid.setColumnStretch(2, 1)
+            self._source_slot_empty.addWidget(self.source_editor)
+        # Neuer Objektname braucht neues Polieren, sonst bleibt der alte Stil.
+        self.url_edit.style().unpolish(self.url_edit)
+        self.url_edit.style().polish(self.url_edit)
+        self.url_edit.setFont(typography.body(15 if not compact else 13))
+
+    # -- Einstieg (vor der ersten Analyse) -------------------------------
+
+    def _build_empty_view(self) -> QWidget:
+        view = QWidget()
+        view.setObjectName("emptyView")
+
+        column = QWidget()
+        column.setMaximumWidth(560)
+        column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        col = QVBoxLayout(column)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+        col.addWidget(LogoMark(64))
+        col.addSpacing(26)
+        col.addWidget(_label("Ein Video, mehrere Fundstuecke.", font=typography.hero(30)))
+        col.addSpacing(10)
+        hint = _label("Lege einen Videolink ab und sammle die Stellen, die du behalten willst.",
+                      "muted", typography.body(14), wrap=True)
+        col.addWidget(hint)
+        col.addSpacing(22)
+        self._source_slot_empty = QVBoxLayout()
+        self._source_slot_empty.setContentsMargins(0, 0, 0, 0)
+        col.addLayout(self._source_slot_empty)
+        col.addSpacing(12)
+        self.empty_status = _label("", "muted", typography.small(12), wrap=True)
+        self.empty_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        col.addWidget(self.empty_status)
+        col.addSpacing(6)
+        col.addWidget(_label("Link per Drag & Drop  ·  Strg + V zum Einfuegen", "muted", typography.small(12)))
+        col.addSpacing(16)
+        self.resolve_banner = _label("", "resolveNote", typography.small(12), wrap=True)
+        col.addWidget(self.resolve_banner)
 
         row = QHBoxLayout()
-        row.setSpacing(10)
-        row.addWidget(self.url_edit, 1)
-        row.addWidget(self.analyse_button)
-        return row
+        row.addStretch(1)
+        row.addWidget(column, 5)
+        row.addStretch(1)
 
-    def _build_info_card(self) -> QWidget:
-        self.info_card = QFrame()
-        self.info_card.setObjectName("card")
-        self.info_card.setVisible(False)
+        layout = QVBoxLayout(view)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.addStretch(1)
+        layout.addLayout(row)
+        layout.addStretch(1)
+        return view
 
-        self.thumbnail_label = QLabel()
-        self.thumbnail_label.setFixedSize(80, 45)
-        self.thumbnail_label.setObjectName("thumbnail")
-        self.thumbnail_label.setAlignment(Qt.AlignCenter)
+    # -- Arbeitsansicht ---------------------------------------------------
 
-        self.title_label = QLabel()
-        self.title_label.setObjectName("title")
-        self.title_label.setFont(typography.title())
-        self.title_label.setWordWrap(True)
+    def _build_work_view(self) -> QWidget:
+        view = QWidget()
+        view.setObjectName("page")
+        row = QHBoxLayout(view)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        row.addWidget(self._build_source_column(), 1)
+        self.collection = self._build_collection()
+        row.addWidget(self.collection)
+        return view
 
-        self.meta_label = QLabel()
-        self.meta_label.setObjectName("muted")
+    def _build_source_column(self) -> QWidget:
+        column = QWidget()
+        column.setObjectName("sourceColumn")
+        column.setAttribute(Qt.WA_StyledBackground, True)
 
-        self.platform_tag = QLabel()
-        self.platform_tag.setObjectName("tag")
-        self.platform_tag.setFont(typography.tag())
-        self.platform_tag.setVisible(False)
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addWidget(_label("Deine Quelle", font=typography.heading(24)))
+        header.addStretch(1)
 
-        self.live_tag = QLabel("LIVE")
-        self.live_tag.setObjectName("tagLive")
-        self.live_tag.setFont(typography.tag())
-        self.live_tag.setVisible(False)
+        self._source_slot_work = QVBoxLayout()
+        self._source_slot_work.setContentsMargins(0, 0, 0, 0)
 
-        tags = QHBoxLayout()
-        tags.setSpacing(6)
-        tags.addWidget(self.platform_tag)
-        tags.addWidget(self.live_tag)
-        tags.addStretch(1)
+        body = QWidget()
+        body.setObjectName("sourceBody")
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 8, 18)
+        layout.setSpacing(0)
 
-        # Kennzahlen und Markierungen teilen sich eine Zeile - das spart Hoehe,
-        # die der Vorschau zugutekommt.
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(10)
-        meta_row.addWidget(self.meta_label)
-        meta_row.addLayout(tags)
-        meta_row.addStretch(1)
-
-        text_column = QVBoxLayout()
-        text_column.setSpacing(5)
-        text_column.addStretch(1)
-        text_column.addWidget(self.title_label)
-        text_column.addLayout(meta_row)
-        text_column.addStretch(1)
-
-        layout = QHBoxLayout(self.info_card)
-        layout.setContentsMargins(11, 9, 14, 9)
-        layout.setSpacing(12)
-        layout.addWidget(self.thumbnail_label)
-        layout.addLayout(text_column, 1)
-        return self.info_card
-
-    def _build_preview_section(self) -> QWidget:
         self.player = PreviewPlayer()
         # Bewusst ohne Hoehenbegrenzung: Die Vorschau ist der Teil, auf den man
         # schaut, waehrend man den Ausschnitt sucht. Sie bekommt allen Platz,
         # den das Fenster hergibt - wer mehr will, zieht das Fenster groesser.
-        return self.player
+        layout.addWidget(self.player, 1)
+        layout.addSpacing(14)
+        layout.addWidget(self._build_meta())
+        layout.addSpacing(14)
+        layout.addWidget(Rule())
+        layout.addSpacing(14)
+        layout.addWidget(self._build_options())
 
-    def _build_trim_section(self) -> QWidget:
-        container = QFrame()
-        container.setObjectName("card")
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        self.source_scroll = scroll
 
-        self.trim_bar = TrimBar()
+        outer = QVBoxLayout(column)
+        outer.setContentsMargins(24, 22, 16, 0)
+        outer.setSpacing(10)
+        outer.addLayout(header)
+        outer.addLayout(self._source_slot_work)
+        outer.addSpacing(4)
+        outer.addWidget(scroll, 1)
+        return column
 
-        self.start_edit = QLineEdit("0:00")
-        self.start_edit.setObjectName("timecode")
-        self.start_edit.setFixedWidth(82)
-        self.start_edit.setAlignment(Qt.AlignCenter)
-        self.start_edit.setFont(typography.mono())
+    def _build_meta(self) -> QWidget:
+        container = QWidget()
+        self.thumbnail_label = QLabel()
+        self.thumbnail_label.setObjectName("thumbnail")
+        self.thumbnail_label.setFixedSize(64, 36)
+        self.thumbnail_label.setAlignment(Qt.AlignCenter)
 
-        self.end_edit = QLineEdit("0:00")
-        self.end_edit.setObjectName("timecode")
-        self.end_edit.setFixedWidth(82)
-        self.end_edit.setAlignment(Qt.AlignCenter)
-        self.end_edit.setFont(typography.mono())
+        self.title_label = _label("", font=typography.title(15))
+        self.title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.title_label.setWordWrap(True)
+        self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.meta_label = _label("", "muted", typography.small(12))
+        self.live_tag = _label("LIVE", "live", typography.tag(10))
+        self.live_tag.setVisible(False)
 
-        self.set_start_button = QPushButton("Anfang hier")
-        self.set_start_button.setObjectName("trimMark")
-        self.set_start_button.setToolTip("Setzt den Anfang auf die Abspielposition  (Taste I)")
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(10)
+        meta_row.addWidget(self.meta_label)
+        meta_row.addWidget(self.live_tag)
+        meta_row.addStretch(1)
 
-        self.set_end_button = QPushButton("Ende hier")
-        self.set_end_button.setObjectName("trimMark")
-        self.set_end_button.setToolTip("Setzt das Ende auf die Abspielposition  (Taste O)")
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        text.addWidget(self.title_label)
+        text.addLayout(meta_row)
 
-        self.add_segment_button = QPushButton("+ Ausschnitt")
-        self.add_segment_button.setObjectName("trimAdd")
-        self.add_segment_button.setToolTip(
-            "Legt den gewaehlten Bereich auf die Liste  (Taste M).\n"
-            "So laesst sich aus einem Video mehr als eine Stelle\n"
-            "herausschneiden - alle Ausschnitte werden nacheinander geladen."
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.thumbnail_label, 0, Qt.AlignTop)
+        layout.addLayout(text, 1)
+        return container
+
+    def _build_options(self) -> QWidget:
+        container = QWidget()
+
+        self.mode_combo = ChoiceGroup("card", accessible_name="Inhalt")
+        for mode, text, icon in MODE_CARDS:
+            # Qt-Datenfelder speichern nur den reinen Text - Mode erbt von str
+            # und kaeme sonst als gewoehnliche Zeichenkette zurueck.
+            self.mode_combo.addItem(text, mode.value, icon=icon, tooltip=mode.label)
+
+        self.quality_combo = ChoiceGroup("chip", accessible_name="Qualitaet")
+        self.quality_combo.setEnabled(False)
+        self.quality_note = _label("Kein Video verfuegbar - es laesst sich nur der Ton laden.",
+                                   "muted", typography.small(12), wrap=True)
+        self.quality_note.setVisible(False)
+
+        self.h264_check = ToggleSwitch("H.264 fuer Resolve")
+        self.h264_check.setChecked(True)
+        self.h264_check.setToolTip(
+            "YouTube liefert 1440p und 4K nur als VP9 oder AV1 aus.\n"
+            "DaVinci Resolve kann diese Formate nicht oeffnen.\n"
+            "Ist der Schalter an, wird notfalls umgewandelt - das dauert\n"
+            "laenger, dafuer laesst sich die Datei sicher importieren."
         )
 
-        self.reset_trim_button = QPushButton("Ganzes Video")
-        self.reset_trim_button.setObjectName("trimReset")
+        self.output_edit = QLineEdit(str(paths.DEFAULT_DOWNLOAD_DIR))
+        self.output_edit.setObjectName("timecode")
+        self.output_edit.setFont(typography.mono(12))
+        self.output_edit.setAccessibleName("Zielordner")
+        self.browse_button = IconButton("folder", "Zielordner waehlen", tooltip="Strg+O")
 
-        self.waveform_button = QPushButton("Tonspur anzeigen")
-        self.waveform_button.setObjectName("waveformAction")
-        self.waveform_button.setEnabled(False)
-        self.waveform_button.setToolTip(
-            "Zeichnet den Lautstaerkeverlauf in den Balken.\n"
-            "Damit siehst du genau, wo ein Lied anfaengt und aufhoert."
-        )
+        folder_text = QVBoxLayout()
+        folder_text.setSpacing(2)
+        folder_text.addWidget(_label("Zielordner", "muted", typography.tiny(11)))
+        folder_text.addWidget(self.output_edit)
+        folder = QHBoxLayout()
+        folder.setSpacing(8)
+        folder.addLayout(folder_text, 1)
+        folder.addWidget(self.browse_button, 0, Qt.AlignBottom)
 
-        self.selection_label = QLabel("-")
-        self.selection_label.setObjectName("muted")
-        self.selection_label.setFont(typography.mono())
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(_label("Inhalt", "muted", typography.small(12)))
+        layout.addSpacing(8)
+        layout.addWidget(self.mode_combo)
+        layout.addSpacing(14)
+        layout.addWidget(_label("Qualitaet", "muted", typography.small(12)))
+        layout.addSpacing(8)
+        layout.addWidget(self.quality_combo)
+        layout.addWidget(self.quality_note)
+        layout.addSpacing(10)
+        layout.addWidget(self.h264_check)
+        layout.addSpacing(12)
+        layout.addWidget(Rule())
+        layout.addSpacing(10)
+        layout.addLayout(folder)
+        return container
 
-        from_label = QLabel("Von")
-        from_label.setObjectName("muted")
-        to_label = QLabel("bis")
-        to_label.setObjectName("muted")
+    # -- Sammelmappe ------------------------------------------------------
 
-        # Erste Zeile: alles, was den Ausschnitt festlegt.
-        controls = QHBoxLayout()
-        controls.setSpacing(8)
-        controls.addWidget(from_label)
-        controls.addWidget(self.start_edit)
-        controls.addWidget(to_label)
-        controls.addWidget(self.end_edit)
-        controls.addSpacing(6)
-        controls.addWidget(self.set_start_button)
-        controls.addWidget(self.set_end_button)
-        controls.addWidget(self.add_segment_button)
-        controls.addStretch(1)
-        controls.addWidget(self.selection_label)
+    def _build_collection(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("collection")
+        panel.setAttribute(Qt.WA_StyledBackground, True)
+        panel.setFixedWidth(COLLECTION_WIDE)
 
-        # Zweite Zeile: Ansicht und die Verwaltung der gemerkten Ausschnitte.
-        # Die drei rechten Elemente erscheinen erst, wenn es etwas zu
-        # verwalten gibt - vorher waeren sie nur Beiwerk.
-        self.segment_count_label = QLabel()
-        self.segment_count_label.setObjectName("muted")
+        self.clear_segments_button = IconButton("bin", "Gemerkte Ausschnitte verwerfen")
+        self.clear_segments_button.setEnabled(False)
+        header = QHBoxLayout()
+        header.addWidget(_label("Sammelmappe", font=typography.heading(24)))
+        header.addStretch(1)
+        header.addWidget(self.clear_segments_button)
 
-        self.remove_segment_button = QPushButton("Entfernen")
-        self.remove_segment_button.setObjectName("quiet")
-        self.remove_segment_button.setEnabled(False)
+        self.collection_stack = QStackedWidget()
+        self.collection_stack.addWidget(self._build_editor())
+        self.collection_stack.addWidget(self._build_delivery())
 
-        self.clear_segments_button = QPushButton("Liste leeren")
-        self.clear_segments_button.setObjectName("quiet")
+        self.plan_label = _label("", font=typography.small(12), wrap=True)
+        self.status_label = _label("Bereit.", "muted", typography.small(12), wrap=True)
+        self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.resolve_note = _label("", "muted", typography.tiny(11), wrap=True)
+        self.download_button = MainAction("Herunterladen")
+        self.download_button.setEnabled(False)
+        self.cancel_button = self.download_button.cancel_button
+
+        send = QVBoxLayout()
+        send.setSpacing(5)
+        send.addWidget(self.plan_label)
+        send.addWidget(self.status_label)
+        send.addWidget(self.resolve_note)
+        send.addSpacing(8)
+        send.addWidget(self.download_button)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(20, 22, 20, 20)
+        layout.setSpacing(12)
+        layout.addLayout(header)
+        layout.addWidget(self.collection_stack, 1)
+        layout.addLayout(send)
+        return panel
+
+    def _build_editor(self) -> QWidget:
+        body = QWidget()
+        body.setObjectName("collectionBody")
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 6, 6)
+        layout.setSpacing(0)
+        layout.addWidget(self._build_slip())
+        layout.addSpacing(18)
 
         self.segment_tools = QWidget()
         tools = QHBoxLayout(self.segment_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(8)
+        tools.addWidget(_label("Gemerkte Ausschnitte", "muted", typography.small(12)))
+        tools.addStretch(1)
+        self.segment_count_label = _label("", "muted", typography.small(12))
         tools.addWidget(self.segment_count_label)
-        tools.addWidget(self.remove_segment_button)
-        tools.addWidget(self.clear_segments_button)
         self.segment_tools.setVisible(False)
+        layout.addWidget(self.segment_tools)
+        layout.addSpacing(8)
 
-        secondary = QHBoxLayout()
-        secondary.setSpacing(8)
-        secondary.addWidget(self.reset_trim_button)
-        secondary.addWidget(self.waveform_button)
-        secondary.addStretch(1)
-        secondary.addWidget(self.segment_tools)
-
-        self.segment_list = QListWidget()
-        self.segment_list.setObjectName("segmentList")
-        self.segment_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.segment_list = SegmentList()
         self.segment_list.setVisible(False)
-
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(9)
-        layout.addWidget(self.trim_bar)
-        layout.addLayout(controls)
-        layout.addLayout(secondary)
         layout.addWidget(self.segment_list)
-        return container
 
-    def _build_options_section(self) -> QWidget:
-        # Bewusst eine einzige Zeile statt einer Karte: Jede Zeile hier fehlt
-        # der Vorschau, und beim Suchen des Ausschnitts schaut man auf das
-        # Video, nicht auf die Einstellungen.
-        container = QWidget()
-
-        self.mode_combo = QComboBox()
-        for mode in Mode:
-            # Qt speichert nur den reinen Text - Mode erbt von str und wuerde
-            # sonst als gewoehnliche Zeichenkette zurueckkommen.
-            self.mode_combo.addItem(mode.label, mode.value)
-
-        self.quality_combo = QComboBox()
-        self.quality_combo.setEnabled(False)
-        self.quality_combo.setMinimumWidth(120)
-
-        self.h264_check = QCheckBox("H.264 fuer Resolve")
-        self.h264_check.setChecked(True)
-        self.h264_check.setToolTip(
-            "YouTube liefert 1440p und 4K nur als VP9 oder AV1 aus.\n"
-            "DaVinci Resolve kann diese Formate nicht oeffnen.\n"
-            "Ist der Haken gesetzt, wird notfalls umgewandelt - das dauert\n"
-            "laenger, dafuer laesst sich die Datei sicher importieren."
+        self.saved_hint = _label(
+            "Noch nichts abgelegt. Stelle waehlen, dann „Ablegen“ (M) - so sammelst du "
+            "mehrere Ausschnitte aus einem Video. Ohne Ablage wird die aktuelle Auswahl geladen.",
+            "muted", typography.small(12), wrap=True,
         )
+        layout.addWidget(self.saved_hint)
+        layout.addStretch(1)
 
-        self.output_edit = QLineEdit(str(paths.DEFAULT_DOWNLOAD_DIR))
-        self.output_edit.setMinimumWidth(180)
-        self.browse_button = QPushButton("Ordner")
-        self.browse_button.setObjectName("quiet")
-        self.browse_button.setToolTip("Zielordner waehlen  (Strg+O)")
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        self.editor_scroll = scroll
+        return scroll
 
-        content_label = QLabel("Inhalt")
-        content_label.setObjectName("muted")
-        quality_label = QLabel("Qualitaet")
-        quality_label.setObjectName("muted")
+    def _build_slip(self) -> QWidget:
+        slip = QFrame()
+        slip.setObjectName("slip")
 
-        row = QHBoxLayout(container)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(10)
-        row.addWidget(content_label)
-        row.addWidget(self.mode_combo, 3)
-        row.addWidget(quality_label)
-        row.addWidget(self.quality_combo, 2)
-        row.addWidget(self.h264_check)
-        row.addSpacing(4)
-        row.addWidget(self.output_edit, 4)
-        row.addWidget(self.browse_button)
-        return container
+        self.slip_title = _label("Neue Auswahl", font=typography.strong(14))
+        self.add_segment_button = TextButton("Ablegen", "plus", variant="outline", height=36)
+        self.add_segment_button.setToolTip(
+            "Legt die Auswahl als Ausschnitt in die Mappe  ·  Taste M.\n"
+            "So laesst sich aus einem Video mehr als eine Stelle herausschneiden -\n"
+            "alle abgelegten Ausschnitte werden gleichzeitig geladen."
+        )
+        top = QHBoxLayout()
+        top.addWidget(self.slip_title)
+        top.addStretch(1)
+        top.addWidget(self.add_segment_button)
 
-    def _build_footer(self) -> QWidget:
-        container = QWidget()
-        container.setObjectName("footer")
+        self.view_label = _label("Auswahl im Detail", "muted", typography.small(12))
+        self.zoom_button = IconButton("zoom_out", "Ganzes Video ueberblicken")
+        self.waveform_button = IconButton("wave", "Tonspur anzeigen")
+        self.waveform_button.setCheckable(True)
+        self.waveform_button.setEnabled(False)
+        self.waveform_button._tooltip_extra = "Zeichnet den Lautstaerkeverlauf - so siehst du, wo ein Lied anfaengt."
+        self.waveform_button.setText("Tonspur anzeigen")
+        view_row = QHBoxLayout()
+        view_row.setSpacing(2)
+        view_row.addWidget(self.view_label)
+        view_row.addStretch(1)
+        view_row.addWidget(self.zoom_button)
+        view_row.addWidget(self.waveform_button)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(2)
+        self.trim_bar = TrimBar()
 
-        self.status_label = QLabel("Bereit.")
-        self.status_label.setObjectName("muted")
+        self.start_edit = QLineEdit("0:00")
+        self.end_edit = QLineEdit("0:00")
+        for edit, name in ((self.start_edit, "Anfang"), (self.end_edit, "Ende")):
+            edit.setObjectName("timecode")
+            edit.setFont(typography.mono(15))
+            edit.setFixedWidth(92)
+            edit.setAccessibleName(name)
+            edit.setToolTip("Zeit als M:SS, H:MM:SS oder mit Zehnteln (1:36.4)")
+        self.selection_label = _label("-", font=typography.mono(15))
+        self.selection_label.setToolTip("Laenge der Auswahl")
+        times = QHBoxLayout()
+        times.setSpacing(8)
+        times.addWidget(_label("Von", "muted", typography.small(12)))
+        times.addWidget(self.start_edit)
+        times.addSpacing(6)
+        times.addWidget(_label("Bis", "muted", typography.small(12)))
+        times.addWidget(self.end_edit)
+        times.addStretch(1)
+        times.addWidget(self.selection_label)
 
-        self.download_button = QPushButton("Herunterladen")
-        self.download_button.setObjectName("primary")
-        self.download_button.setMinimumWidth(160)
-        self.download_button.setEnabled(False)
+        self.set_start_button = IconButton("in", "Anfang auf Abspielposition", key="I", variant="outline")
+        self.set_end_button = IconButton("out", "Ende auf Abspielposition", key="O", variant="outline")
+        self.reset_trim_button = IconButton("all", "Ganzes Video", variant="outline")
+        tools = QHBoxLayout()
+        tools.setSpacing(8)
+        tools.addWidget(self.set_start_button)
+        tools.addWidget(self.set_end_button)
+        tools.addWidget(self.reset_trim_button)
+        tools.addStretch(1)
+        tools.addWidget(_label("M  ablegen", "accentText", typography.mono(11)))
 
-        self.cancel_button = QPushButton("Abbrechen")
-        self.cancel_button.setVisible(False)
+        self.slip_note = _label("", "muted", typography.small(12), wrap=True)
+        self.slip_note.setVisible(False)
 
-        buttons = QHBoxLayout()
-        buttons.setSpacing(10)
-        buttons.addWidget(self.status_label, 1)
-        buttons.addWidget(self.cancel_button)
-        buttons.addWidget(self.download_button)
+        layout = QVBoxLayout(slip)
+        layout.setContentsMargins(14, 10, 14, 14)
+        layout.setSpacing(8)
+        layout.addLayout(top)
+        layout.addWidget(Rule("slipRule"))
+        layout.addLayout(view_row)
+        layout.addWidget(self.trim_bar)
+        layout.addSpacing(2)
+        layout.addLayout(times)
+        layout.addSpacing(2)
+        layout.addLayout(tools)
+        layout.addWidget(self.slip_note)
+        return slip
 
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(44, 0, 44, 24)
-        layout.setSpacing(16)
-        layout.addWidget(self.progress_bar)
-        layout.addLayout(buttons)
-        return container
+    def _build_delivery(self) -> QWidget:
+        view = QWidget()
+        view.setObjectName("collectionBody")
+        self.delivery_heading = _label("Wird gespeichert.", font=typography.hero(27))
+        self.delivery_list = DeliveryList()
+        self.back_button = TextButton("Zurueck zur Mappe", "back", variant="ghost")
+        self.back_button.setVisible(False)
+
+        layout = QVBoxLayout(view)
+        layout.setContentsMargins(10, 20, 6, 6)
+        layout.setSpacing(0)
+        layout.addWidget(self.delivery_heading)
+        layout.addSpacing(28)
+        layout.addWidget(self.delivery_list)
+        layout.addSpacing(20)
+        layout.addWidget(self.back_button)
+        layout.addStretch(1)
+        return view
 
     def _connect_signals(self) -> None:
         self.analyse_button.clicked.connect(self._start_probe)
         self.url_edit.returnPressed.connect(self._start_probe)
+        self.paste_button.clicked.connect(self._paste_from_clipboard)
+        self.clear_link_button.clicked.connect(self._clear_link)
 
         self.trim_bar.rangeChanged.connect(self._on_range_changed)
-        self.trim_bar.seeked.connect(self.player.seek)
+        self.trim_bar.seeked.connect(self._on_trim_seeked)
         self.trim_bar.scrubbed.connect(self._on_trim_scrub)
         self.trim_bar.scrubFinished.connect(self._on_trim_scrub_finished)
         self.trim_bar.segmentPicked.connect(self._load_segment)
@@ -695,22 +841,22 @@ class MainWindow(QMainWindow):
         self.set_start_button.clicked.connect(self._set_start_from_playhead)
         self.set_end_button.clicked.connect(self._set_end_from_playhead)
         self.add_segment_button.clicked.connect(self._add_segment)
-        self.remove_segment_button.clicked.connect(self._remove_segment)
         self.clear_segments_button.clicked.connect(self._clear_segments)
-        self.segment_list.itemSelectionChanged.connect(self._on_segment_selected)
-        self.segment_list.itemDoubleClicked.connect(
-            lambda item: self._load_segment(self.segment_list.row(item))
-        )
+        self.segment_list.activated.connect(self._load_segment)
+        self.segment_list.removeRequested.connect(self._remove_segment_at)
         self.reset_trim_button.clicked.connect(self._reset_trim)
         self.waveform_button.clicked.connect(self._toggle_waveform)
+        self.zoom_button.clicked.connect(self._toggle_zoom)
 
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.browse_button.clicked.connect(self._choose_output_dir)
 
         self.download_button.clicked.connect(self._on_primary_clicked)
         self.cancel_button.clicked.connect(self._cancel_download)
+        self.back_button.clicked.connect(self._back_to_collection)
         self.download_nav_button.clicked.connect(self._show_download)
         self.library_nav_button.clicked.connect(self._show_library)
+        self.menu_button.clicked.connect(self._show_menu)
         self.library_page.downloadRequested.connect(self._show_download)
         self.library_page.chooseFolderRequested.connect(self._choose_library_dir)
         # Ein neuer Link hebt den Abschluss wieder auf.
@@ -718,6 +864,13 @@ class MainWindow(QMainWindow):
         # textEdited feuert nur bei Eingaben von Hand, nicht bei setText -
         # genau das soll als eigene Entscheidung gelten.
         self.output_edit.textEdited.connect(self._mark_output_chosen)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        # Schmale Fenster: Mappe etwas schmaler, damit der Vorschau Platz bleibt.
+        self.collection.setFixedWidth(COLLECTION_NARROW if self.width() < 940 else COLLECTION_WIDE)
+        # Niedrige Fenster: flache Medienkarten statt Schrift zu verkleinern.
+        self.mode_combo.set_compact(self.height() < COMPACT_HEIGHT)
 
     # ------------------------------------------------------------------
     # Menuebefehle
@@ -729,6 +882,11 @@ class MainWindow(QMainWindow):
             self._set_status("In der Zwischenablage steht kein Text.", error=True)
             return
         self.url_edit.setText(text)
+        self.url_edit.setFocus()
+        self._reset_completed()
+
+    def _clear_link(self) -> None:
+        self.url_edit.clear()
         self.url_edit.setFocus()
 
     def _open_output_dir(self) -> None:
@@ -817,7 +975,7 @@ class MainWindow(QMainWindow):
             self._install_app_update(release)
         else:
             self._set_status(
-                "Version {} wartet - Hilfe -> Nach Aktualisierung suchen.".format(release.version)
+                "Version {} wartet - Menue -> Nach Aktualisierung suchen.".format(release.version)
             )
 
     def _install_app_update(self, release: "appupdate.AppRelease") -> None:
@@ -845,6 +1003,7 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Aktualisierung")
         dialog.setWindowModality(Qt.WindowModal)
         dialog.setMinimumDuration(0)
+        dialog.setMinimumWidth(380)
         dialog.setAutoClose(False)
         dialog.setAutoReset(False)
         dialog.setValue(0)
@@ -924,7 +1083,7 @@ class MainWindow(QMainWindow):
         already_offered = self._settings.value("offered_version", "", type=str) == release.version
         if busy or already_offered:
             self._set_status(
-                "Version {} ist verfuegbar - Hilfe -> Nach Aktualisierung suchen.".format(release.version)
+                "Version {} ist verfuegbar - Menue -> Nach Aktualisierung suchen.".format(release.version)
             )
             return
         self._settings.setValue("offered_version", release.version)
@@ -934,22 +1093,25 @@ class MainWindow(QMainWindow):
         from .. import __version__
         from ..core.update import current_version
 
-        QMessageBox.information(
-            self,
-            "Ueber Fev Download",
-            "Fev Download {}\n\n"
+        box = QMessageBox(self)
+        box.setWindowTitle("Ueber Fev Download")
+        box.setIconPixmap(logo_pixmap(56))
+        box.setText("<b>Fev Download {}</b>".format(__version__))
+        box.setInformativeText(
             "Laedt Videos von YouTube und ueber tausend weiteren Plattformen, "
-            "schneidet den gewuenschten Ausschnitt heraus und uebergibt ihn an "
+            "schneidet die gewuenschten Ausschnitte heraus und uebergibt sie an "
             "DaVinci Resolve.\n\n"
             "yt-dlp {}\n"
             "Laesst eine Plattform sich nicht mehr laden, hilft meist\n"
-            "Hilfe -> Nach Aktualisierung suchen.\n\n"
+            "Menue -> Nach Aktualisierung suchen.\n\n"
             "https://github.com/{}\n"
             "Fremde Bestandteile und ihre Lizenzen (u. a. ffmpeg, GPLv3): "
-            "siehe LIZENZEN.txt im Programmordner.\n\n"
+            "siehe LIZENZEN.txt im Programmordner; "
+            "beigelegte ffmpeg-Quellen unter licenses/ffmpeg.\n\n"
             "Bitte nur fuer eigene Inhalte verwenden oder fuer Material, dessen "
-            "Lizenz das erlaubt.".format(__version__, current_version(), appupdate.GITHUB_REPO),
+            "Lizenz das erlaubt.".format(current_version(), appupdate.GITHUB_REPO)
         )
+        box.exec()
 
     # ------------------------------------------------------------------
     # Seiten und Bibliothek
@@ -957,10 +1119,12 @@ class MainWindow(QMainWindow):
 
     def _show_download(self) -> None:
         self.pages.setCurrentIndex(0)
+        self.download_nav_button.setChecked(True)
 
     def _show_library(self) -> None:
         self.library_page.refresh()
         self.pages.setCurrentIndex(1)
+        self.library_nav_button.setChecked(True)
 
     def _library_root(self) -> Path:
         value = self.output_edit.text().strip()
@@ -989,14 +1153,17 @@ class MainWindow(QMainWindow):
         url = self.url_edit.text().strip()
         if not url:
             self._set_status("Bitte zuerst einen Link einfuegen.", error=True)
+            self.url_edit.setFocus()
             return
         if self._probe_worker is not None and self._probe_worker.isRunning():
+            return
+        if self._running:
             return
 
         self.analyse_button.setEnabled(False)
         self.download_button.setEnabled(False)
+        self.analyse_busy.set_running(True)
         self._set_status("Analysiere Link...")
-        self.progress_bar.setRange(0, 0)  # unbestimmter Fortschritt
 
         self._probe_worker = ProbeWorker(url, self)
         self._probe_worker.succeeded.connect(self._on_probe_succeeded)
@@ -1008,13 +1175,18 @@ class MainWindow(QMainWindow):
         # Die Wellenform des vorherigen Videos ist jetzt gegenstandslos.
         self._waveform_peaks = []
         self.waveform_button.setText("Tonspur anzeigen")
+        self.waveform_button.setChecked(False)
         self.waveform_button.setEnabled(bool(info.audio_url))
         self.analyse_button.setEnabled(True)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+        self.analyse_busy.set_running(False)
 
-        self.info_card.setVisible(True)
+        if self.download_stack.currentIndex() != 1:
+            self._place_source_editor(compact=True)
+            self.download_stack.setCurrentIndex(1)
+            fade_in(self.collection)
+
         self.title_label.setText(info.title)
+        self.title_label.setToolTip(info.title)
         # Der Fenstertitel verraet in der Taskleiste, worum es gerade geht.
         short = info.title if len(info.title) <= 60 else info.title[:57] + "..."
         self.setWindowTitle(f"{short} - Fev Download")
@@ -1022,14 +1194,14 @@ class MainWindow(QMainWindow):
         details = []
         if info.uploader:
             details.append(info.uploader)
+        if info.extractor:
+            details.append(info.extractor)
         details.append(info.duration_text)
-        self.meta_label.setText("   ·   ".join(details))
-
-        self.platform_tag.setText(info.extractor.upper() if info.extractor else "")
-        self.platform_tag.setVisible(bool(info.extractor))
+        self.meta_label.setText("  ·  ".join(details))
         self.live_tag.setVisible(info.is_live)
 
         self.thumbnail_label.clear()
+        self.thumbnail_label.setVisible(bool(info.thumbnail_url))
         if info.thumbnail_url:
             self._thumb_worker = ThumbnailWorker(info.thumbnail_url, self)
             self._thumb_worker.loaded.connect(self._on_thumbnail_loaded)
@@ -1041,6 +1213,7 @@ class MainWindow(QMainWindow):
         # neuen schlicht falsch.
         self._clear_segments(silent=True)
         self.trim_bar.set_duration(info.duration)
+        self.trim_bar.set_hint("" if info.audio_url else "Zu diesem Video gibt es keine abrufbare Tonspur.")
         self.player.set_aspect(info.aspect)
         self._preview_attempted_download = False
         self.player.load(info.preview_url, fallback_duration=info.duration)
@@ -1049,8 +1222,9 @@ class MainWindow(QMainWindow):
             self._start_preview_fallback()
 
         self._completed = False
-        self.download_button.setText("Herunterladen")
+        self._show_editor()
         self.download_button.setEnabled(True)
+        self._update_download_button()
         if info.is_live:
             self._set_status("Achtung: Livestream - der Ausschnitt kann ungenau sein.")
         else:
@@ -1058,8 +1232,8 @@ class MainWindow(QMainWindow):
 
     def _on_probe_failed(self, message: str) -> None:
         self.analyse_button.setEnabled(True)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+        self.analyse_busy.set_running(False)
+        self.download_button.setEnabled(self._info is not None)
         self._set_status(message, error=True)
 
     def _on_thumbnail_loaded(self, data: bytes) -> None:
@@ -1080,10 +1254,11 @@ class MainWindow(QMainWindow):
             self.quality_combo.addItem(quality.label, quality.height)
 
         has_video = bool(info.qualities)
+        self.quality_combo.setVisible(has_video)
+        self.quality_note.setVisible(not has_video)
         self.quality_combo.setEnabled(has_video and self._current_mode().needs_video)
 
         if not has_video:
-            self.quality_combo.addItem("kein Video verfuegbar", None)
             self.mode_combo.setCurrentIndex(self.mode_combo.findData(Mode.AUDIO_ONLY.value))
             return
 
@@ -1096,30 +1271,49 @@ class MainWindow(QMainWindow):
     # Ausschnitt
     # ------------------------------------------------------------------
 
+    def _saved_index(self, start: float, end: float) -> int:
+        for index, (a, b) in enumerate(self._segments):
+            if abs(a - start) < 0.05 and abs(b - end) < 0.05:
+                return index
+        return -1
+
     def _on_range_changed(self, start: float, end: float) -> None:
-        self.start_edit.setText(format_timecode(start))
-        self.end_edit.setText(format_timecode(end))
+        self.start_edit.setText(precise_timecode(start))
+        self.end_edit.setText(precise_timecode(end))
         length = max(0.0, end - start)
-        if self._segments:
-            # Solange etwas auf der Liste steht, wird die geladen. Hier "ganzes
-            # Video" zu behaupten, waere schlicht falsch.
-            self.selection_label.setText(f"Auswahl · {format_timecode(length)}")
-        elif self.trim_bar.is_full_range():
-            self.selection_label.setText(f"ganzes Video · {format_timecode(length)}")
+        self.selection_label.setText(precise_timecode(length))
+
+        saved = self._saved_index(start, end)
+        if saved != self.segment_list.currentRow():
+            self.segment_list.setCurrentRow(saved)
+        has_info = self._info is not None
+        if saved >= 0:
+            self.slip_title.setText(f"Ausschnitt {saved + 1}  ·  liegt in der Mappe")
+            self.add_segment_button.setEnabled(False)
+            self.slip_note.setVisible(False)
         else:
-            self.selection_label.setText(f"Ausschnitt · {format_timecode(length)}")
+            self.slip_title.setText("Ganzes Video" if self.trim_bar.is_full_range() else "Neue Auswahl")
+            self.add_segment_button.setEnabled(has_info)
+            # Solange etwas in der Mappe liegt, wird nur die geladen. Das muss
+            # am Zettel stehen, sonst glaubt man, die Auswahl komme mit.
+            if self._segments:
+                self.slip_note.setText(
+                    "Nicht in der Mappe - geladen wird nur, was abgelegt ist."
+                )
+            self.slip_note.setVisible(bool(self._segments))
+        self._update_plan()
 
     def _on_start_edited(self) -> None:
         try:
             self.trim_bar.set_start(parse_timecode(self.start_edit.text()))
         except ValueError:
-            self.start_edit.setText(format_timecode(self.trim_bar.start()))
+            self.start_edit.setText(precise_timecode(self.trim_bar.start()))
 
     def _on_end_edited(self) -> None:
         try:
             self.trim_bar.set_end(parse_timecode(self.end_edit.text()))
         except ValueError:
-            self.end_edit.setText(format_timecode(self.trim_bar.end()))
+            self.end_edit.setText(precise_timecode(self.trim_bar.end()))
 
     def _set_start_from_playhead(self) -> None:
         self.trim_bar.set_start(self.player.position())
@@ -1132,25 +1326,42 @@ class MainWindow(QMainWindow):
             return
         # set_duration verwirft die Wellenform - sie gehoert aber weiter zum
         # selben Video, also gleich wieder einsetzen. Ebenso die gemerkten
-        # Ausschnitte: Sie gelten weiter, nur der Balken faengt von vorn an.
+        # Ausschnitte: Sie gelten weiter, nur der Zettel faengt von vorn an.
         peaks = self._waveform_peaks
+        shown = self.trim_bar.has_waveform()
         self.trim_bar.set_duration(self._info.duration)
-        if peaks:
+        if peaks and shown:
             self.trim_bar.set_waveform(peaks)
         self.trim_bar.set_segments(self._segments)
+
+    def _toggle_zoom(self) -> None:
+        zoomed = not self.trim_bar.is_zoomed()
+        self.trim_bar.set_zoomed(zoomed)
+        if zoomed:
+            self.zoom_button.set_icon("zoom_out")
+            self.zoom_button.setText("Ganzes Video ueberblicken")
+            self.view_label.setText("Auswahl im Detail")
+        else:
+            self.zoom_button.set_icon("zoom_in")
+            self.zoom_button.setText("Auf die Auswahl zoomen")
+            self.view_label.setText("Ganzes Video")
 
     # ------------------------------------------------------------------
     # Vorschau folgt dem Griff
     # ------------------------------------------------------------------
 
+    def _on_trim_seeked(self, seconds: float) -> None:
+        self.player.seek(seconds)
+        # Ohne abspielbare Vorschau meldet der Player nichts zurueck.
+        self.trim_bar.set_playhead(seconds)
+
     def _on_trim_scrub(self, seconds: float) -> None:
         """
         Waehrend ein Griff gezogen wird, springt die Vorschau mit.
 
-        Ohne das waere der Ausschnitt eine reine Zahlenangabe - man saehe nicht,
-        an welchem Bild geschnitten wird. Gedrosselt, weil jede Mausbewegung
-        sonst einen eigenen Sprungbefehl ausloest und der Player ins Stocken
-        geraet; der genaue Endwert kommt beim Loslassen ueber scrubFinished.
+        Gedrosselt, weil jede Mausbewegung sonst einen eigenen Sprungbefehl
+        ausloest und der Player ins Stocken geraet; der genaue Endwert kommt
+        beim Loslassen ueber scrubFinished.
         """
         if self._scrub_clock.elapsed() < 50:
             return
@@ -1174,9 +1385,11 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _add_segment(self) -> None:
-        """Legt den gerade eingestellten Bereich auf die Liste."""
+        """Legt den gerade eingestellten Bereich in die Mappe."""
         if self._info is None or self.trim_bar.duration() <= 0:
             self._set_status("Erst einen Link analysieren.", error=True)
+            return
+        if self._running:
             return
 
         start = round(self.trim_bar.start(), 2)
@@ -1184,104 +1397,115 @@ class MainWindow(QMainWindow):
         if end - start < 1.0:
             self._set_status("Der Ausschnitt ist zu kurz.", error=True)
             return
-        if (start, end) in self._segments:
-            self._set_status("Dieser Ausschnitt steht schon auf der Liste.")
+        if (start, end) in self._segments or self._saved_index(start, end) >= 0:
+            self._set_status("Dieser Ausschnitt liegt schon in der Mappe.")
             return
 
         self._segments.append((start, end))
         self._segments.sort()
-        self._refresh_segments()
-        self.segment_list.setCurrentRow(self._segments.index((start, end)))
+        index = self._segments.index((start, end))
+        self._refresh_segments(animate_index=index)
+        self.segment_list.setCurrentRow(index)
         self._set_status(
-            f"Gemerkt: {format_timecode(start)} bis {format_timecode(end)}  ·  "
-            f"{len(self._segments)} auf der Liste"
+            f"Abgelegt: {precise_timecode(start)} bis {precise_timecode(end)}  ·  "
+            f"{len(self._segments)} in der Mappe"
         )
 
     def _remove_segment(self) -> None:
-        row = self.segment_list.currentRow()
-        if not (0 <= row < len(self._segments)):
+        self._remove_segment_at(self.segment_list.currentRow())
+
+    def _remove_segment_at(self, row: int) -> None:
+        if not (0 <= row < len(self._segments)) or self._running:
             return
         start, end = self._segments.pop(row)
         self._refresh_segments()
-        self._set_status(
-            f"Entfernt: {format_timecode(start)} bis {format_timecode(end)}"
-        )
+        self._set_status(f"Entfernt: {precise_timecode(start)} bis {precise_timecode(end)}")
 
     def _clear_segments(self, silent: bool = False) -> None:
-        if not self._segments:
+        if not self._segments or self._running:
             return
         self._segments = []
         self._refresh_segments()
         if not silent:
-            self._set_status("Die Liste der Ausschnitte ist wieder leer.")
+            self._set_status("Die Mappe ist wieder leer.")
 
     def _load_segment(self, index: int) -> None:
-        """Holt einen gemerkten Ausschnitt zurueck in den Balken."""
+        """Holt einen gemerkten Ausschnitt zurueck in den Zettel."""
         if not (0 <= index < len(self._segments)):
             return
         start, end = self._segments[index]
         self.trim_bar.set_range(start, end)
         self.segment_list.setCurrentRow(index)
         self._seek_preview(start)
+        # Ein Klick auf den gemerkten Ausschnitt spielt genau diesen Teil in
+        # Schleife, bis man anhaelt (Leertaste) oder im Video springt.
+        self.player.loop_range(start, end)
 
-    def _on_segment_selected(self) -> None:
-        self.remove_segment_button.setEnabled(self.segment_list.currentRow() >= 0)
+    def _toggle_playback(self) -> None:
+        """Leertaste: Vorschau anhalten bzw. weiterspielen."""
+        if self.pages.currentIndex() != 0 or self.download_stack.currentIndex() != 1:
+            return
+        if self.player.can_play():
+            self.player.toggle_play()
 
-    def _refresh_segments(self) -> None:
-        """Bringt Liste, Balken, Zaehler und Knopfbeschriftung auf denselben Stand."""
-        self.segment_list.clear()
-        for index, (start, end) in enumerate(self._segments, start=1):
-            # Feste Spaltenbreite: In der Monospace-Schrift stehen '1:12' und
-            # '10:30' sonst versetzt und die Liste wirkt unruhig.
-            item = QListWidgetItem(
-                f"{index}.  {format_timecode(start):>8}  bis {format_timecode(end):>8}"
-                f"     {format_timecode(end - start):>8} lang"
-            )
-            item.setFont(typography.mono())
-            self.segment_list.addItem(item)
+    def _refresh_segments(self, animate_index: int = -1) -> None:
+        """Bringt Liste, Zeitleiste, Zaehler und Knopf auf denselben Stand."""
+        title = self._info.title if self._info else ""
+        items = [
+            (title, f"{precise_timecode(a)}–{precise_timecode(b)}  ·  {format_timecode(b - a)}")
+            for a, b in self._segments
+        ]
+        self.segment_list.set_items(items, animate_index=animate_index)
 
         count = len(self._segments)
         self.segment_list.setVisible(count > 0)
         self.segment_tools.setVisible(count > 0)
+        self.saved_hint.setVisible(count == 0)
+        self.clear_segments_button.setEnabled(count > 0)
         if count:
             total = sum(end - start for start, end in self._segments)
-            word = "Ausschnitt" if count == 1 else "Ausschnitte"
-            self.segment_count_label.setText(
-                f"{count} {word}  ·  {format_timecode(total)} gesamt"
-            )
-            self._size_segment_list()
+            self.segment_count_label.setText(f"{count}  ·  {format_timecode(total)}")
 
         self.trim_bar.set_segments(self._segments)
-        self._on_segment_selected()
         self._update_download_button()
-        # Die Auswahl-Anzeige haengt davon ab, ob die Liste gefuellt ist.
+        # Zettel und Anzeige haengen davon ab, ob die Mappe gefuellt ist.
         self._on_range_changed(self.trim_bar.start(), self.trim_bar.end())
 
-    def _size_segment_list(self) -> None:
-        """
-        Die Liste waechst mit, bis drei Ausschnitte sichtbar sind.
-
-        Eine feste Hoehe waere bei einem Eintrag halb leer und bei fuenfen zu
-        klein. Ab dem vierten wird gerollt - mehr Hoehe fehlte der Vorschau.
-        """
-        row = self.segment_list.sizeHintForRow(0)
-        if row <= 0:
+    def _update_plan(self) -> None:
+        """Sagt ueber dem Knopf, was er gleich laedt - nie mehr, als stimmt."""
+        if self._info is None:
+            self.plan_label.setText("")
+            self.plan_label.setVisible(False)
             return
-        visible = min(len(self._segments), 3)
-        frame = 2 * self.segment_list.frameWidth() + 8  # Rahmen und Innenabstand
-        self.segment_list.setFixedHeight(visible * row + frame)
+        count = len(self._segments)
+        if count:
+            total = format_timecode(sum(b - a for a, b in self._segments))
+            if count == 1:
+                text = f"1 abgelegter Ausschnitt wird geladen  ·  {total}"
+            else:
+                text = f"{count} abgelegte Ausschnitte werden gleichzeitig geladen  ·  {total} gesamt"
+        elif self.trim_bar.is_full_range():
+            text = f"Das ganze Video wird geladen  ·  {format_timecode(self._info.duration)}"
+        else:
+            length = precise_timecode(self.trim_bar.end() - self.trim_bar.start())
+            text = f"Die aktuelle Auswahl wird geladen  ·  {length}"
+        self.plan_label.setText(text)
+        self.plan_label.setVisible(True)
+
+    def _download_label(self) -> str:
+        count = len(self._segments)
+        if count > 1:
+            return f"{count} Ausschnitte laden"
+        if count == 1:
+            return "Ausschnitt laden"
+        return "Herunterladen"
 
     def _update_download_button(self) -> None:
         """Der Knopf sagt, was gleich passiert - ein Clip oder mehrere."""
-        if self._completed:
+        if self._completed or self._running:
             return
-        count = len(self._segments)
-        if count > 1:
-            self.download_button.setText(f"{count} Ausschnitte laden")
-        elif count == 1:
-            self.download_button.setText("Ausschnitt laden")
-        else:
-            self.download_button.setText("Herunterladen")
+        self.download_button.set_idle(self._download_label())
+        self._update_plan()
 
     # ------------------------------------------------------------------
     # Vorschau
@@ -1334,14 +1558,17 @@ class MainWindow(QMainWindow):
         if self.trim_bar.has_waveform():
             self.trim_bar.set_waveform([])
             self.waveform_button.setText("Tonspur anzeigen")
+            self.waveform_button.setChecked(False)
             return
 
         # Schon einmal berechnet - dann nur wieder einblenden.
         if self._waveform_peaks:
             self.trim_bar.set_waveform(self._waveform_peaks)
             self.waveform_button.setText("Tonspur ausblenden")
+            self.waveform_button.setChecked(True)
             return
 
+        self.waveform_button.setChecked(False)
         if self._info is None or not self._info.audio_url:
             self._set_status("Zu diesem Video gibt es keine abrufbare Tonspur.", error=True)
             return
@@ -1350,11 +1577,14 @@ class MainWindow(QMainWindow):
 
         self.waveform_button.setEnabled(False)
         self.waveform_button.setText("Lade Tonspur...")
+        self.trim_bar.set_hint("Tonspur wird geladen ...")
 
+        # Mehr Werte als Pixel: Die Detailansicht zoomt hinein und braucht
+        # dort noch Aufloesung.
         self._waveform_worker = WaveformWorker(
             self._info.audio_url,
             self._info.duration,
-            buckets=max(300, self.trim_bar.width()),
+            buckets=min(36000, max(1200, int(self._info.duration * 10))),
             parent=self,
         )
         self._waveform_worker.succeeded.connect(self._on_waveform_ready)
@@ -1364,12 +1594,16 @@ class MainWindow(QMainWindow):
     def _on_waveform_ready(self, peaks: list) -> None:
         self._waveform_peaks = list(peaks)
         self.trim_bar.set_waveform(self._waveform_peaks)
+        self.trim_bar.set_hint("")
         self.waveform_button.setText("Tonspur ausblenden")
+        self.waveform_button.setChecked(True)
         self.waveform_button.setEnabled(True)
 
     def _on_waveform_failed(self, message: str) -> None:
         self.waveform_button.setText("Tonspur anzeigen")
+        self.waveform_button.setChecked(False)
         self.waveform_button.setEnabled(True)
+        self.trim_bar.set_hint("Tonspur nicht geladen - erneut ueber das Wellen-Symbol versuchen.")
         self._set_status(message, error=True)
 
     # ------------------------------------------------------------------
@@ -1408,7 +1642,7 @@ class MainWindow(QMainWindow):
         """Der grosse Knopf laedt herunter - und schliesst, wenn alles fertig ist."""
         if self._completed:
             self.close()
-        else:
+        elif not self._running:
             self._start_download()
 
     def _reset_completed(self) -> None:
@@ -1416,14 +1650,29 @@ class MainWindow(QMainWindow):
         if not self._completed:
             return
         self._completed = False
+        self._show_editor()
         self._update_download_button()
+
+    def _back_to_collection(self) -> None:
+        """Aus der Lieferliste zurueck an den Zettel - z. B. fuer weitere Stellen."""
+        if self._running:
+            return
+        self._completed = False
+        self._show_editor()
+        self._update_download_button()
+
+    def _show_editor(self) -> None:
+        if self.collection_stack.currentIndex() != 0:
+            self.collection_stack.setCurrentIndex(0)
+            fade_in(self.collection_stack.currentWidget())
+        self.clear_segments_button.setEnabled(bool(self._segments))
 
     def _build_requests(self) -> list[DownloadRequest]:
         """
         Baut die Auftragsliste fuer den Download.
 
-        Stehen Ausschnitte auf der Liste, gilt ausschliesslich sie - der Balken
-        war dann nur das Werkzeug, mit dem sie entstanden sind. Ist die Liste
+        Liegen Ausschnitte in der Mappe, gilt ausschliesslich sie - der Zettel
+        war dann nur das Werkzeug, mit dem sie entstanden sind. Ist die Mappe
         leer, zaehlt wie bisher der eingestellte Bereich.
         """
         if self._info is None:
@@ -1467,29 +1716,49 @@ class MainWindow(QMainWindow):
 
         self._finished_files = []
         self.player.pause()
+        self._open_delivery(requests)
         self._set_state_busy()
-        # Beim Schneiden laedt ffmpeg selbst und meldet dabei nichts - bis zur
-        # ersten Zahl vergehen leicht zehn Sekunden. Ein unbestimmter Balken
-        # zeigt solange wenigstens, dass ueberhaupt etwas laeuft.
-        self.progress_bar.setRange(0, 0)
         if len(requests) > 1:
-            self._set_status(
-                f"Lade {len(requests)} Ausschnitte gleichzeitig..."
-            )
+            self._set_status(f"Lade {len(requests)} Ausschnitte gleichzeitig...")
         else:
             self._set_status("Starte Download...")
 
         self._download_worker = DownloadWorker(requests, self)
         self._download_worker.progressed.connect(self._on_progress)
+        self._download_worker.partReady.connect(self._on_part_ready)
         self._download_worker.fileReady.connect(self._on_file_ready)
         self._download_worker.succeeded.connect(self._on_download_succeeded)
         self._download_worker.failed.connect(self._on_download_failed)
         self._download_worker.cancelled.connect(self._on_download_cancelled)
         self._download_worker.start()
 
+    def _open_delivery(self, requests: list[DownloadRequest]) -> None:
+        """Ersetzt den Zettel durch die Lieferliste - einen Eintrag je Auftrag."""
+        title = self._info.title if self._info else ""
+        jobs = []
+        for number, request in enumerate(requests, start=1):
+            name = f"{title}  ·  Ausschnitt {number}" if len(requests) > 1 else title
+            if request.start is None:
+                span = f"Ganzes Video  ·  {format_timecode(self._info.duration if self._info else 0)}"
+            else:
+                span = f"{precise_timecode(request.start)}–{precise_timecode(request.end)}"
+            jobs.append((name, span))
+        self._job_rows = self.delivery_list.set_jobs(jobs)
+        for row in self._job_rows:
+            row.path = None
+            row.folder_button.clicked.connect(lambda _=False, r=row: r.path and self._reveal(r.path))
+        self._parts_done = 0
+        # Die Auftraege laufen in Reihenfolge an, hoechstens MAX_PARALLEL zugleich.
+        for index, row in enumerate(self._job_rows):
+            row.set_state(JobRow.RUNNING if index < MAX_PARALLEL else JobRow.WAITING)
+        self.delivery_heading.setText("Wird gespeichert.")
+        self.back_button.setVisible(False)
+        self.collection_stack.setCurrentIndex(1)
+        fade_in(self.collection_stack.currentWidget())
+
     def _cancel_download(self) -> None:
         if self._download_worker is not None and self._download_worker.isRunning():
-            self._set_status("Breche ab...")
+            self._set_status("Breche ab - der laufende Ausschnitt wird noch fertig geladen...")
             self.cancel_button.setEnabled(False)
             self._download_worker.cancel()
 
@@ -1499,20 +1768,38 @@ class MainWindow(QMainWindow):
         # gleichzeitig, ein einzelner Balken je Download waere Unfug.
         prefix = [progress.part_text] if progress.part_text else []
 
-        if progress.status == "downloading":
-            self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(int(progress.percent))
+        if progress.status == "downloading" and progress.percent > 0:
+            self.download_button.set_progress(progress.percent, f"{progress.percent:.0f} %")
             bits = prefix + [f"{progress.percent:.0f} %"]
             if progress.speed_text:
                 bits.append(progress.speed_text)
             if progress.eta_text:
                 bits.append(progress.eta_text)
-            self._set_status("   ·   ".join(bits))
+            self._set_status("  ·  ".join(bits))
         else:
-            if progress.status == "processing":
-                self.progress_bar.setRange(0, 0)
+            self.download_button.set_progress(None)
             bits = prefix + [progress.message or "Wird verarbeitet..."]
-            self._set_status("   ·   ".join(bits))
+            self._set_status("  ·  ".join(bits))
+
+    def _on_part_ready(self, index: int, path: Path) -> None:
+        """Ein Auftrag ist fertig - Zeile abhaken, der naechste wartende rueckt nach."""
+        if not (0 <= index < len(self._job_rows)):
+            return
+        row = self._job_rows[index]
+        if row.state() != JobRow.DONE:
+            self._parts_done += 1
+        row.set_state(JobRow.DONE)
+        row.path = path
+        row.folder_button.setToolTip(str(path))
+        for position, other in enumerate(self._job_rows):
+            if other.state() == JobRow.WAITING and position < MAX_PARALLEL + self._parts_done:
+                other.set_state(JobRow.RUNNING)
+
+    def _reveal(self, path: Path) -> None:
+        try:
+            subprocess.Popen(["explorer", "/select,", str(path)])
+        except Exception as exc:
+            self._set_status(f"Ordner laesst sich nicht oeffnen: {exc}", error=True)
 
     def _on_file_ready(self, result: Path) -> None:
         """
@@ -1527,10 +1814,9 @@ class MainWindow(QMainWindow):
             self._results.add_file(result)
 
     def _on_download_succeeded(self, result: Path) -> None:
+        self._running = False
         self._completed = True
         self._set_state_idle()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(100)
 
         # Bei einem einzelnen Auftrag hat _on_file_ready dieselbe Datei schon
         # vermerkt; add_file und diese Pruefung halten das auseinander.
@@ -1548,53 +1834,79 @@ class MainWindow(QMainWindow):
         else:
             self._set_status(f"Gespeichert: {result.name}")
 
-        self.download_button.setText("Fertig")
+        if self.collection_stack.currentIndex() == 1:
+            self.delivery_heading.setText("Abgelegt.")
+            self.back_button.setVisible(True)
+        # "werden geladen" stimmt jetzt nicht mehr - die Statuszeile sagt, was ist.
+        self.plan_label.setVisible(False)
+        self.download_button.set_done("Fertig")
+        self.download_button.setToolTip("Fenster schliessen")
         self.download_button.setFocus()
 
         self.on_download_finished(result)
 
+    def _finish_rows(self) -> None:
+        for row in self._job_rows:
+            if row.state() != JobRow.DONE:
+                row.set_state(JobRow.FAILED)
+        self.back_button.setVisible(True)
+
     def _on_download_failed(self, message: str) -> None:
+        self._running = False
         self._set_state_idle()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+        self._finish_rows()
+        self.delivery_heading.setText("Nicht alles geladen.")
         self._set_status(message, error=True)
         QMessageBox.warning(self, "Download fehlgeschlagen", message)
 
     def _on_download_cancelled(self) -> None:
+        self._running = False
         self._set_state_idle()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+        self._finish_rows()
+        self.delivery_heading.setText("Abgebrochen.")
         self._set_status("Abgebrochen.")
 
     def on_download_finished(self, result: Path) -> None:
-        """Haken fuer die Resolve-Anbindung - in Phase 3 ueberschrieben."""
+        """Haken fuer die Resolve-Anbindung."""
 
     # ------------------------------------------------------------------
     # Zustaende
     # ------------------------------------------------------------------
 
     def _set_state_busy(self) -> None:
-        self.download_button.setVisible(False)
-        self.cancel_button.setVisible(True)
-        self.cancel_button.setEnabled(True)
+        self._running = True
+        self.download_button.set_running("Wird geladen")
+        self.download_button.setToolTip("")
         self.analyse_button.setEnabled(False)
         self.url_edit.setEnabled(False)
+        self.paste_button.setEnabled(False)
+        self.clear_link_button.setEnabled(False)
+        self.clear_segments_button.setEnabled(False)
+        self.add_segment_button.setEnabled(False)
 
     def _set_state_idle(self) -> None:
-        self.download_button.setVisible(True)
         self.download_button.setEnabled(self._info is not None)
-        self.cancel_button.setVisible(False)
+        self.download_button.setToolTip("")
+        if not self._completed:
+            self.download_button.set_idle(self._download_label())
         self.analyse_button.setEnabled(True)
         self.url_edit.setEnabled(True)
+        self.paste_button.setEnabled(True)
+        self.clear_link_button.setEnabled(True)
+        # In der Lieferliste gibt es nichts zu verwerfen.
+        self.clear_segments_button.setEnabled(
+            bool(self._segments) and self.collection_stack.currentIndex() == 0
+        )
+        if self._info is not None and not self._completed:
+            self._on_range_changed(self.trim_bar.start(), self.trim_bar.end())
 
     def _set_status(self, message: str, error: bool = False) -> None:
-        self.status_label.setText(message)
-        self.status_label.setObjectName("error" if error else "muted")
-        # Damit die geaenderte Farbe auch wirklich gezeichnet wird.
-        self.status_label.style().unpolish(self.status_label)
-        self.status_label.style().polish(self.status_label)
-
-    # ------------------------------------------------------------------
+        for label in (self.status_label, self.empty_status):
+            label.setText(message)
+            label.setObjectName("error" if error else "muted")
+            # Damit die geaenderte Farbe auch wirklich gezeichnet wird.
+            label.style().unpolish(label)
+            label.style().polish(label)
 
     # ------------------------------------------------------------------
     # Ziehen und Ablegen

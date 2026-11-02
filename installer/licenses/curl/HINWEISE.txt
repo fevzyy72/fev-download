@@ -1,0 +1,36 @@
+curl_cffi 0.17.0 und native Netzwerkbibliotheken
+===============================================
+curl_cffi: MIT, Copyright (c) 2018 multippt und (c) 2022 curl_cffi developers.
+Originaltext aus Wheel unter ../curl_cffi/, Upstream-Original zusaetzlich hier.
+
+Lokal ohne Netzwerk mit Curl.version() aus der verwendeten DLL ermittelt:
+  libcurl/8.23.0-IMPERSONATE BoringSSL zlib/1.3.1 brotli/1.2.1 zstd/1.5.7
+  c-ares/1.34.9 WinIDN nghttp2/1.63.0 ngtcp2/1.20.0 nghttp3/1.15.0
+  curl-impersonate/2.3.1
+Wichtig: README von curl_cffi v0.17.0 nennt 2.3.0. Fuer die lokale DLL ist
+deren eigene Versionsausgabe 2.3.1 massgeblich. Die Zuordnung ist deshalb
+ausdruecklich nicht allein aus der Python-Paketfassung abgeleitet.
+
+Originaltexte im Ordner (Herkunft/Hashes in ../HERKUNFT.json):
+  curl-COPYING.txt: curl-Lizenz, Copyright Daniel Stenberg und Mitwirkende.
+  zlib-LICENSE.txt: zlib-Lizenz.
+  brotli-LICENSE.txt: MIT.
+  zstd-LICENSE.txt: BSD-3-Clause-Option.
+  cares-LICENSE.txt: MIT-artige c-ares-Lizenz, Einzelhinweise beachten.
+  nghttp2-LICENSE.txt, ngtcp2-LICENSE.txt, nghttp3-LICENSE.txt: MIT.
+  BoringSSL-LICENSE.txt: Original mit eigenen/Drittanbieter-Bedingungen.
+  curl-impersonate-2.3.1-LICENSE.txt: MIT.
+Nicht jede Bibliothek unterliegt der MIT-Lizenz von curl_cffi!
+
+Feste Quellenverweise fuer diese Versionen stehen in QUELLEN.json.
+Quellen/Build-Hinweise von curl-impersonate:
+  https://github.com/lexiforest/curl-impersonate/tree/v2.3.1
+  https://github.com/lexiforest/curl-impersonate/archive/refs/tags/v2.3.1.tar.gz
+Python-Wrapper:
+  https://github.com/lexiforest/curl_cffi/tree/v0.17.0
+
+OFFEN: BoringSSL meldet keinen Commit in Curl.version(). Der beiliegende
+Lizenztext stammt vom in v2.3.1 festgelegten BoringSSL-Commit; Identitaet mit
+dem konkreten Windows-Wheel ist damit nicht unabhaengig nachgewiesen.
+Transitive Bestandteile, zusaetzliche Datei-Copyrights und lokale Patches
+bleiben mit dem vollstaendigen Wheel-Baunachweis abzugleichen.

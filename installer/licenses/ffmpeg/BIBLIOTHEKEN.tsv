@@ -1,0 +1,56 @@
+Bibliothek	Version laut originaler gyan-9.0-README	Lizenz / Belegstand	Fester Quellverweis oder offene Zuordnung	Mitgeliefert / offen
+AMF	v1.5.2-2-gc35f613	MIT + AMD-Standard-/Patenthinweise	https://github.com/GPUOpen-LibrariesAndSDKs/AMF/archive/c35f613.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+aom	v3.14.1-138-g4f8be91496	OFFEN: Einzellizenz nicht von gyan angegeben	https://aomedia.googlesource.com/aom/+/4f8be91496/	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+AviSynthPlus	v3.7.5-342-gcfdaf8eb	GPL-2.0-or-later laut FFmpeg LICENSE.md; Einzelabgleich offen	https://github.com/AviSynth/AviSynthPlus/tree/cfdaf8eb8a0a05b14edf7e73736df382bb876592	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+cairo	1.18.5	OFFEN: exakter Quellstand/Einzellizenz	https://cairographics.org/	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+ffnvcodec	n13.1.15.0-1-geddcea9	OFFEN: README belegt Version, keinen Lizenzvolltext	https://github.com/FFmpeg/nv-codec-headers/archive/eddcea9.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+gsm	1.0.24	OFFEN: Einzellizenz/Archivabgleich	https://www.quut.com/gsm/	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+lame	3.100	OFFEN: Einzellizenz/Archivabgleich	https://lame.sourceforge.io/	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libgme	0.6.6	OFFEN: Lizenzdatei am Versions-Tag nicht erreichbar	https://github.com/libgme/game-music-emu	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libopencore-amrnb	0.1.6	Apache-2.0 laut FFmpeg LICENSE.md; Einzelabgleich offen	https://sourceforge.net/projects/opencore-amr/files/opencore-amr/opencore-amr-0.1.6.tar.gz	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libopencore-amrwb	0.1.6	Apache-2.0 laut FFmpeg LICENSE.md; Einzelabgleich offen	https://sourceforge.net/projects/opencore-amr/files/opencore-amr/opencore-amr-0.1.6.tar.gz	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libssh	0.12.0	LGPL-2.1-or-later; COPYING liegt bei	https://github.com/libssh/libssh-mirror/archive/libssh-0.12.0.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+libtheora	v1.2.0	BSD-3-Clause	https://github.com/xiph/theora/archive/v1.2.0.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+libwebp	v1.6.0-195-g733c91e	BSD-3-Clause; Patenthinweise gesondert pruefen	https://github.com/webmproject/libwebp/archive/733c91e.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+openal-soft	latest	OFFEN: kein fester Quellstand von gyan angegeben	https://github.com/kcat/openal-soft	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+openmpt	libopenmpt-0.6.28-38-g879fd166	BSD-3-Clause	https://github.com/OpenMPT/openmpt/archive/879fd166.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+opus	v1.6.1-50-g3da9f7a6	BSD-3-Clause; Patenthinweise gesondert pruefen	https://github.com/xiph/opus/archive/3da9f7a6.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+rubberband	v4.0.0	GPL-2.0-or-later	https://github.com/breakfastquay/rubberband/tree/1d95888bec3ae0a17c0c4af791810d5a63f6bc35	Quellarchiv und Originalhinweise liegen bei; Hersteller-Patches/Bauskripte offen
+SDL	release-2.32.0-228-ga2e7c76bd	Zlib	https://github.com/libsdl-org/SDL/archive/a2e7c76bd.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+speex	Speex-1.2.1-51-g0589522	BSD-3-Clause	https://github.com/xiph/speex/archive/0589522.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+srt	v1.5.6-1-ga13859e	MPL-2.0	https://github.com/Haivision/srt/archive/a13859e.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+VAAPI	2.25.0.	OFFEN: genannter Tag/Lizenzdatei nicht erreichbar	https://github.com/intel/libva	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+vidstab	v1.1.2-23-g8f5ce58	GPL-2.0-or-later	https://github.com/georgmartius/vid.stab/tree/8f5ce5838982804c0869e33ddc4968a3ceeda40c	Quellarchiv und Originalhinweise liegen bei; Hersteller-Patches/Bauskripte offen
+vmaf	v3.2.0-9-g4991d2b5	BSD-2-Clause-Patent	https://github.com/Netflix/vmaf/archive/4991d2b5.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+vo-amrwbenc	0.1.3	Apache-2.0 laut FFmpeg LICENSE.md; Einzelabgleich offen	https://sourceforge.net/projects/opencore-amr/files/vo-amrwbenc/vo-amrwbenc-0.1.3.tar.gz	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+vorbis	v1.3.7-36-ge3c9861f	BSD-3-Clause	https://github.com/xiph/vorbis/archive/e3c9861f.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+VPL	2.17	MIT; genutztes Upstream-Tag v2.17.0	https://github.com/intel/libvpl/archive/v2.17.0.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+vpx	v1.16.0-181-g3e25f224f	BSD-3-Clause; Patenthinweise gesondert pruefen	https://github.com/webmproject/libvpx/archive/3e25f224f.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+x264	v0.165.3223; Testframe: r3223 0480cb0	GPL-2.0-or-later	https://github.com/mirror/x264/tree/0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee	Quellarchiv und Originalhinweise liegen bei; Hersteller-Patches/Bauskripte offen
+x265	4.3-2-g5ab552e	GPL-2.0-or-later laut FFmpeg LICENSE.md; exakte Quelle OFFEN	https://bitbucket.org/multicoreware/x265_git/get/5ab552e.tar.gz	Exaktes Archiv abgefragt: HTTP 404; kein beliebiger Ersatz beigelegt
+xvid	v1.3.7	GPL-2.0-or-later	https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz	Quellarchiv und Originalhinweise liegen bei; Hersteller-Patches/Bauskripte offen
+zeromq	4.3.5	MPL-2.0 (nicht pauschal LGPL)	https://github.com/zeromq/libzmq/archive/v4.3.5.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+zimg	release-3.0.6-252-g1ad1895	WTFPL-2.0 laut COPYING; weitere Datei-Bedingungen pruefen	https://github.com/sekrit-twc/zimg/archive/1ad1895.tar.gz	Lizenz-/Copyright-Datei liegt bei; Quellarchiv nur verlinkt
+bzlib	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+gmp	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+gnutls	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+iconv	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libxml2	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libfontconfig	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libass	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libfreetype	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libfribidi	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libharfbuzz	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libopenjpeg	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+lzma	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+zlib	NICHT in gyan-README genannt	OFFEN: keine buildgenaue Einzellizenz	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+cuda	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+cuda_llvm	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+cuvid	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+d3d11va	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+d3d12va	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+dxva2	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+mediafoundation	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+nvdec	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+nvenc	API/Backend; keine separate Version genannt	OFFEN: Header/SDK/Runtime und Systembibliothek unterscheiden	siehe BUILD.txt und GYAN-README.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie
+libmfx	NUR in gyan-README; nicht in -buildconf	OFFEN: Widerspruch zum lokalen Binary	GYAN-README.txt / BUILD.txt	Quell-/Lizenzabgleich offen; Link nicht als Verfuegbarkeitsgarantie

@@ -1,4 +1,4 @@
-"""Bibliothek fuer bereits heruntergeladene Medien."""
+"""Bibliothek fuer bereits heruntergeladene Medien ("Dateien" in der Leiste)."""
 
 from __future__ import annotations
 
@@ -8,29 +8,30 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFontMetricsF, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QFrame,
-    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
+    QSizePolicy,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from . import typography
+from . import style, typography
+from .widgets import ChoiceGroup, IconButton, IconMark, Rule, TextButton
 from .worker import LibraryThumbWorker
 
-# Grosse genug, um den Inhalt zu erkennen, klein genug fuer eine ruhige Liste.
-THUMB_SIZE = QSize(72, 41)
+# Gross genug, um den Inhalt zu erkennen, klein genug fuer eine ruhige Liste.
+THUMB_SIZE = QSize(96, 54)
 # Obergrenze fuer eine Ansicht: Bei einem Ordner mit tausenden Dateien waere es
 # sinnlos, fuer alle ffmpeg zu bemuehen - sichtbar sind ohnehin nur wenige.
 THUMB_LIMIT = 400
@@ -120,6 +121,59 @@ def format_size(size: int) -> str:
     return f"{value:.1f} TB"
 
 
+class _RowDelegate(QStyledItemDelegate):
+    """
+    Zeichnet eine Zeile als Medienkarte: Bild, Name, Angaben.
+
+    Die Daten stehen weiter in den (ausgeblendeten) Spalten Typ, Format, Datum,
+    Groesse - Suche, Filter und Tests arbeiten unveraendert damit.
+    """
+
+    def sizeHint(self, option, index) -> QSize:  # noqa: N802
+        return QSize(option.rect.width(), THUMB_SIZE.height() + 22)
+
+    def paint(self, painter: QPainter, option, index) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(option.rect)
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(rect, QColor(style.TINT))
+            painter.fillRect(QRectF(rect.left(), rect.top(), 3, rect.height()), QColor(style.ACCENT))
+        elif option.state & QStyle.State_MouseOver:
+            painter.fillRect(rect, QColor(style.HOVER))
+        painter.fillRect(QRectF(rect.left(), rect.bottom(), rect.width(), 1), QColor(style.LINE))
+
+        model = index.model()
+        row = index.row()
+        name = index.data() or ""
+        kind = model.index(row, 1).data()
+        fmt = model.index(row, 2).data()
+        date = model.index(row, 3).data()
+        size = model.index(row, 4).data()
+
+        thumb = QRectF(rect.left() + 12, rect.top() + 11, THUMB_SIZE.width(), THUMB_SIZE.height())
+        icon = index.data(Qt.DecorationRole)
+        if isinstance(icon, QIcon) and not icon.isNull():
+            icon.paint(painter, thumb.toRect(), Qt.AlignCenter)
+        else:
+            painter.fillRect(thumb, QColor(style.DISABLED))
+
+        left = thumb.right() + 18
+        width = max(10.0, rect.right() - left - 12)
+        painter.setFont(typography.strong(14))
+        painter.setPen(QColor(style.INK))
+        metrics = QFontMetricsF(painter.font())
+        painter.drawText(QRectF(left, rect.top() + 11, width, 20), Qt.AlignLeft | Qt.AlignVCenter,
+                         metrics.elidedText(name, Qt.ElideMiddle, width))
+        painter.setFont(typography.small(12))
+        kind_text = "Video" if kind == "Video" else "Ton"
+        painter.drawText(QRectF(left, rect.top() + 32, width, 18), Qt.AlignLeft | Qt.AlignVCenter,
+                         f"{kind_text}  ·  {fmt}  ·  {size}")
+        painter.setPen(QColor(style.MUTED))
+        painter.drawText(QRectF(left, rect.top() + 50, width, 16), Qt.AlignLeft | Qt.AlignVCenter, date or "")
+        painter.restore()
+
+
 class LibraryPage(QWidget):
     """Durchsuchbare Liste der Dateien im aktuellen Download-Ordner."""
 
@@ -133,6 +187,8 @@ class LibraryPage(QWidget):
         parent=None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("libraryPage")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self._root_provider = root_provider
         self._import_file = import_file
         self._entries: list[LibraryEntry] = []
@@ -148,36 +204,32 @@ class LibraryPage(QWidget):
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(44, 26, 44, 28)
+        root.setContentsMargins(32, 22, 32, 20)
         root.setSpacing(0)
 
-        root.addWidget(self._build_header())
-        root.addSpacing(14)
-
-        rule = QFrame()
-        rule.setObjectName("rule")
-        rule.setFrameShape(QFrame.HLine)
-        rule.setFixedHeight(1)
-        root.addWidget(rule)
-        root.addSpacing(20)
-
-        controls = QFrame()
-        controls.setObjectName("card")
-        controls_layout = QVBoxLayout(controls)
-        controls_layout.setContentsMargins(16, 14, 16, 14)
-        controls_layout.setSpacing(10)
+        title = QLabel("Bibliothek")
+        title.setFont(typography.heading(24))
+        self.back_button = TextButton("Zurueck zum Video", "back", variant="ghost")
+        header = QHBoxLayout()
+        header.addWidget(title)
+        header.addStretch(1)
+        header.addWidget(self.back_button)
+        root.addLayout(header)
+        root.addSpacing(18)
 
         self.search_edit = QLineEdit()
-        self.search_edit.setObjectName("librarySearch")
-        self.search_edit.setPlaceholderText("Nach Dateiname oder Ordner suchen")
+        self.search_edit.setObjectName("search")
+        self.search_edit.setPlaceholderText("Dateien suchen - Name oder Ordner")
         self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.setAccessibleName("Dateien suchen")
 
-        self.kind_combo = QComboBox()
-        self.kind_combo.addItem("Alle Medien", "all")
-        self.kind_combo.addItem("Nur Videos", "video")
-        self.kind_combo.addItem("Nur Audio", "audio")
+        self.kind_combo = ChoiceGroup("tab", accessible_name="Art")
+        self.kind_combo.addItem("Alle", "all")
+        self.kind_combo.addItem("Video", "video")
+        self.kind_combo.addItem("Ton", "audio")
 
         self.date_combo = QComboBox()
+        self.date_combo.setAccessibleName("Zeitraum")
         self.date_combo.addItem("Jedes Datum", "all")
         self.date_combo.addItem("Heute", "today")
         self.date_combo.addItem("Letzte 7 Tage", "week")
@@ -185,76 +237,73 @@ class LibraryPage(QWidget):
         self.date_combo.addItem("Dieses Jahr", "year")
 
         self.sort_combo = QComboBox()
+        self.sort_combo.setAccessibleName("Sortierung")
         self.sort_combo.addItem("Neueste zuerst", "newest")
         self.sort_combo.addItem("Aelteste zuerst", "oldest")
         self.sort_combo.addItem("Name A-Z", "name")
         self.sort_combo.addItem("Groesste zuerst", "size")
 
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(10)
-        filter_row.addWidget(self.search_edit, 5)
-        filter_row.addWidget(self.kind_combo, 2)
-        filter_row.addWidget(self.date_combo, 2)
-        filter_row.addWidget(self.sort_combo, 2)
-        controls_layout.addLayout(filter_row)
+        self.choose_folder_button = IconButton("folder", "Ordner wechseln")
+        self.refresh_button = IconButton("refresh", "Neu einlesen")
 
-        root.addWidget(controls)
-        root.addSpacing(14)
+        filters = QHBoxLayout()
+        filters.setSpacing(8)
+        filters.addWidget(IconMark("search", 22, style.INK))
+        filters.addWidget(self.search_edit, 1)
+        filters.addSpacing(8)
+        filters.addWidget(self.kind_combo)
+        filters.addWidget(self.date_combo)
+        filters.addWidget(self.sort_combo)
+        filters.addWidget(self.choose_folder_button)
+        filters.addWidget(self.refresh_button)
+        root.addLayout(filters)
+        root.addSpacing(16)
 
         info_row = QHBoxLayout()
-        info_row.setSpacing(10)
+        info_row.setSpacing(12)
         self.count_label = QLabel("0 Dateien")
-        self.count_label.setObjectName("libraryCount")
-        self.count_label.setFont(typography.title(10))
+        self.count_label.setFont(typography.strong(13))
         self.folder_label = QLabel()
         self.folder_label.setObjectName("muted")
+        self.folder_label.setFont(typography.mono(12))
         self.folder_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-
-        self.choose_folder_button = QPushButton("Ordner wechseln")
-        self.choose_folder_button.setObjectName("quiet")
-        self.refresh_button = QPushButton("Aktualisieren")
-        self.refresh_button.setObjectName("softAction")
-
+        self.folder_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         info_row.addWidget(self.count_label)
         info_row.addWidget(self.folder_label, 1)
-        info_row.addWidget(self.choose_folder_button)
-        info_row.addWidget(self.refresh_button)
         root.addLayout(info_row)
-        root.addSpacing(10)
+        root.addSpacing(8)
+        root.addWidget(Rule())
 
         self.table = QTreeWidget()
         self.table.setObjectName("libraryTable")
         self.table.setColumnCount(5)
         self.table.setHeaderLabels(["Name", "Typ", "Format", "Datum", "Groesse"])
+        self.table.setHeaderHidden(True)
+        for column in range(1, 5):
+            self.table.setColumnHidden(column, True)
         self.table.setIconSize(THUMB_SIZE)
         self.table.setRootIsDecorated(False)
+        self.table.setIndentation(0)
         self.table.setUniformRowHeights(True)
-        self.table.setAlternatingRowColors(False)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAllColumnsShowFocus(True)
         self.table.setSortingEnabled(False)
+        self.table.setMouseTracking(True)
+        self.table.setItemDelegate(_RowDelegate(self.table))
+        self.table.setAccessibleName("Dateien")
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-        header = self.table.header()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-
-        empty = QFrame()
-        empty.setObjectName("libraryEmpty")
+        empty = QWidget()
         empty_layout = QVBoxLayout(empty)
         empty_layout.setContentsMargins(32, 32, 32, 32)
         empty_layout.addStretch(1)
+        empty_layout.addWidget(IconMark("library", 36), 0, Qt.AlignHCenter)
+        empty_layout.addSpacing(12)
         self.empty_title = QLabel("Noch keine Medien gefunden")
         self.empty_title.setAlignment(Qt.AlignCenter)
-        self.empty_title.setFont(typography.hero(16))
-        self.empty_hint = QLabel(
-            "Downloads aus diesem Ordner erscheinen automatisch hier."
-        )
+        self.empty_title.setFont(typography.heading(20))
+        self.empty_hint = QLabel("Downloads aus diesem Ordner erscheinen automatisch hier.")
         self.empty_hint.setObjectName("muted")
         self.empty_hint.setAlignment(Qt.AlignCenter)
         self.empty_hint.setWordWrap(True)
@@ -270,18 +319,19 @@ class LibraryPage(QWidget):
         root.addSpacing(14)
 
         actions = QHBoxLayout()
-        actions.setSpacing(10)
+        actions.setSpacing(8)
         self.status_label = QLabel("Bereit.")
         self.status_label.setObjectName("muted")
-        self.open_folder_button = QPushButton("Im Ordner zeigen")
+        self.status_label.setFont(typography.small(12))
+        self.status_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.open_folder_button = TextButton("Im Ordner zeigen", "folder", variant="ghost")
         self.open_folder_button.setEnabled(False)
-        self.open_button = QPushButton("Oeffnen")
-        self.open_button.setObjectName("primary")
-        self.open_button.setEnabled(False)
-        self.import_button = QPushButton("In Media Pool")
-        self.import_button.setObjectName("resolveAction")
+        self.import_button = TextButton("In Media Pool", "download", variant="outline")
         self.import_button.setVisible(self._import_file is not None)
         self.import_button.setEnabled(False)
+        self.open_button = TextButton("Oeffnen", "play", variant="accent", height=40)
+        self.open_button.setEnabled(False)
+        self.open_button.setToolTip("Datei abspielen  ·  Eingabetaste oder Doppelklick")
 
         actions.addWidget(self.status_label, 1)
         actions.addWidget(self.open_folder_button)
@@ -289,33 +339,8 @@ class LibraryPage(QWidget):
         actions.addWidget(self.open_button)
         root.addLayout(actions)
 
-    def _build_header(self) -> QWidget:
-        container = QWidget()
-
-        title = QLabel("Bibliothek")
-        title.setObjectName("hero")
-        title.setFont(typography.hero())
-
-        subtitle = QLabel("Deine Downloads, sofort griffbereit.")
-        subtitle.setObjectName("subtitle")
-
-        self.download_nav_button = QPushButton("Download")
-        self.download_nav_button.setObjectName("nav")
-        self.library_nav_button = QPushButton("Bibliothek")
-        self.library_nav_button.setObjectName("navActive")
-
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
-        layout.addWidget(title, 0, Qt.AlignBottom)
-        layout.addWidget(subtitle, 0, Qt.AlignBottom)
-        layout.addStretch(1)
-        layout.addWidget(self.download_nav_button)
-        layout.addWidget(self.library_nav_button)
-        return container
-
     def _connect_signals(self) -> None:
-        self.download_nav_button.clicked.connect(self.downloadRequested.emit)
+        self.back_button.clicked.connect(self.downloadRequested.emit)
         self.choose_folder_button.clicked.connect(self.chooseFolderRequested.emit)
         self.refresh_button.clicked.connect(self.refresh)
         self.search_edit.textChanged.connect(self._apply_filters)
@@ -323,7 +348,8 @@ class LibraryPage(QWidget):
         self.date_combo.currentIndexChanged.connect(self._apply_filters)
         self.sort_combo.currentIndexChanged.connect(self._apply_filters)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
-        self.table.itemDoubleClicked.connect(lambda _item, _column: self._open_selected())
+        # itemActivated deckt Doppelklick und Eingabetaste ab.
+        self.table.itemActivated.connect(lambda _item, _column: self._open_selected())
         self.open_button.clicked.connect(self._open_selected)
         self.open_folder_button.clicked.connect(self._show_selected_in_folder)
         self.import_button.clicked.connect(self._import_selected)
@@ -395,9 +421,6 @@ class LibraryPage(QWidget):
             key = str(entry.path)
             item.setData(0, Qt.UserRole, key)
             item.setToolTip(0, key)
-            item.setTextAlignment(1, Qt.AlignCenter)
-            item.setTextAlignment(2, Qt.AlignCenter)
-            item.setTextAlignment(4, Qt.AlignRight | Qt.AlignVCenter)
 
             cached = self._thumbs.get(key)
             if cached:
@@ -444,9 +467,9 @@ class LibraryPage(QWidget):
         """
         if self._placeholder is None:
             pixmap = QPixmap(THUMB_SIZE)
-            pixmap.fill(QColor("#FBFBFA"))
+            pixmap.fill(QColor(style.DISABLED))
             painter = QPainter(pixmap)
-            painter.setPen(QColor("#EAEAEA"))
+            painter.setPen(QColor(style.LINE_SOFT))
             painter.drawRect(0, 0, THUMB_SIZE.width() - 1, THUMB_SIZE.height() - 1)
             painter.end()
             self._placeholder = pixmap
