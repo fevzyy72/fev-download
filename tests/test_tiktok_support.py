@@ -79,6 +79,8 @@ class UpdateTests(unittest.TestCase):
             patch("fevdl.core.update.latest_version", return_value=("2026.8.19", "wheel")),
             patch("fevdl.core.update._fetch", return_value=b"wheel") as fetch,
             patch("fevdl.core.update._extract_wheel") as extract,
+            # Sonst hinge der Test davon ab, was auf diesem Rechner schon nachgeladen ist.
+            patch("fevdl.paths.installed_ytdlp_version", return_value=None),
         ):
             result = update_ytdlp()
         self.assertTrue(result.changed)

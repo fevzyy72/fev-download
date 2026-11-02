@@ -51,6 +51,10 @@ THUMB_CACHE_DIR = IPC_DIR / "thumbs"
 # schreibgeschuetzt, dieser hier gehoert dem Nutzer.
 YTDLP_DIR = IPC_DIR / "ytdlp"
 
+# Merkt sich, wann zuletzt nach einem neuen yt-dlp gesucht wurde, damit die
+# stille Pruefung beim Start nicht bei jedem Oeffnen das Netz bemueht.
+UPDATE_CHECK_FILE = IPC_DIR / "update_check.json"
+
 DEFAULT_DOWNLOAD_DIR = Path.home() / "Videos" / "FevDownloader"
 
 

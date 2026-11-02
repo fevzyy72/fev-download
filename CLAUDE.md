@@ -69,6 +69,9 @@ powershell -ExecutionPolicy Bypass -File install_plugin.ps1
 # Installer zum Weitergeben bauen -> dist\FevDownloadSetup.exe (~97 MB)
 powershell -ExecutionPolicy Bypass -File build_installer.ps1
 
+# Neue Fassung veröffentlichen: Tests, Bau, git push, GitHub-Release (siehe 5., "Aktualisierung der App")
+powershell -ExecutionPolicy Bypass -File release.ps1 -Notizen "Was ist neu"
+
 # Oberfläche starten
 powershell -ExecutionPolicy Bypass -File run_gui.ps1
 
@@ -103,6 +106,7 @@ davinciplugin/
 ├── install_plugin.ps1        Script nach Resolve kopieren, install.json schreiben
 ├── run_gui.ps1               Oberfläche starten (Entwicklung)
 ├── build_installer.ps1       Weitergabe: PyInstaller + Inno Setup in einem Lauf
+├── release.ps1               Veröffentlichen: Tests + Bau + git push + GitHub-Release
 ├── fevdl.spec                Bauplan für PyInstaller (Ausschlüsse!)
 ├── installer/FevDownload.iss Bauplan für Inno Setup (Installer)
 ├── launch.pyw                Einstieg ohne Konsolenfenster (Verknüpfung + Resolve)
@@ -125,7 +129,8 @@ davinciplugin/
     │   ├── download.py       Download, Ausschnitt, H.264-Umwandlung, Vorschaudatei
     │   ├── waveform.py       Lautstärkeverlauf über ffmpeg
     │   ├── thumbs.py         Standbilder der Bibliothek, mit Zwischenspeicher
-    │   ├── update.py         Holt neueres yt-dlp von PyPI nach
+    │   ├── update.py         Holt neueres yt-dlp von PyPI nach (auch still beim Start)
+    │   ├── appupdate.py      Neue App-Fassung: GitHub-Release abfragen, Installer laden und starten
     │   └── errors.py         Deutsche Fehlermeldungen (humanize)
     └── gui/
         ├── main_window.py    Hauptfenster, hält den ganzen Ablauf zusammen
@@ -446,10 +451,13 @@ Dateien aus einem früheren Lauf liegen — etwa ein von Hand hineinkopiertes
 `bin\` — und der Installer packt ffmpeg doppelt ein.
 
 **Prüfen, ob der gepackte Zustand wirklich lädt:** Dass das Fenster aufgeht,
-beweist nichts über yt-dlp und ffmpeg. Der belastbare Test ist eine
-Konsolen-Fassung mit denselben Ausschlüssen, die `fevdl.cli` aufruft — damit
-lassen sich `probe` und ein kurzer `get` echt durchspielen. Wurde einmal so
-gemacht und wieder verworfen; bei Zweifeln wiederholen.
+beweist nichts über yt-dlp und ffmpeg. Dafür gibt es jetzt
+**`FevDownload.exe --selbsttest`** (`src/fevdl/selftest.py`): ohne Fenster, mit
+echter Analyse, einem 3-Sekunden-Ausschnitt und der Vorschaudatei. Das Ergebnis
+steht in `%LOCALAPPDATA%\FevDownloader\selbsttest.txt` (die .exe hat keine Konsole),
+Exit-Code 0 = in Ordnung. **Vor jedem Release gegen die frisch gebaute `.exe`
+laufen lassen** — und bei einem Problem eines Freundes bitten, genau diese Datei zu
+schicken. Aus dem Quelltext: `python -m fevdl --selbsttest` (`test_selbsttest.py`).
 
 ### yt-dlp nachladen
 
@@ -480,6 +488,59 @@ nur, weil `fevdl.spec` sie per `copy_metadata("yt-dlp")` mitnimmt. Fehlen sie, g
 der alte Weg (nachgeladen hat Vorrang) — lieber das, als ein Update zu verlieren.
 Getestet in `test_ytdlp_vorrang.py`.
 
+### Aktualisierung der App (GitHub)
+
+Gebaut, weil die App an wenige Freunde geht, die kein Python haben und nicht von
+Hand nachladen sollen. Repo: `fevzyy72/fev-download`, **öffentlich** — ein
+privates Repo ließe sich ohne Anmeldung nicht abfragen, und einen Zugangsschlüssel
+darf die App nicht enthalten.
+
+**Ablauf:** `release.ps1` lädt `FevDownloadSetup.exe` als Release hoch.
+`core/appupdate.py` fragt `…/releases/latest` ab, vergleicht mit
+`fevdl.__version__` (Zahl für Zahl, `paths.version_key`), lädt den Installer in
+`%TEMP%\FevDownload\update`, prüft Größe und SHA-256 und startet ihn mit
+`/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS`, abgekoppelt
+(`DETACHED_PROCESS`). Danach beendet sich die App.
+
+**Der Installer startet die App wieder:** `FevDownload.iss` hat dafür eine zweite
+`[Run]`-Zeile mit `skipifnotsilent` (die erste, mit dem Haken auf der
+Abschlussseite, hat `skipifsilent`). Ohne sie verschwände die App nach dem Update
+einfach. `RestartApplications=no`, damit nichts doppelt startet.
+
+**Wo das nicht hinfliegen darf:**
+- Die Prüfung beim Start steht in `__main__.py` (`window.start_background_update_check()`),
+  **nicht** im `MainWindow`-Konstruktor — sonst gingen alle Oberflächen-Tests ins Netz.
+- Sie läuft nur im installierten Programm (`paths.IS_FROZEN`). Aus dem Quelltext
+  wäre es bei jedem Commit Rauschen, und ein Installer würde dort eine zweite Kopie
+  anlegen. `FEVDL_UPDATE_CHECK=1` erzwingt sie, `FEVDL_NO_UPDATE_CHECK=1` unterdrückt sie.
+  Aus dem Quelltext öffnet „Jetzt aktualisieren“ nur die Release-Seite.
+- Ein normaler `threading.Thread(daemon=True)` statt `QThread`: Hängt das Netz, muss
+  das Schließen des Fensters nicht warten. `UpdateNotifier` trägt die Signale.
+  Der Download des Installers dagegen ist ein `QThread` (`AppUpdateWorker`), weil
+  der Nutzer dabei vor einem Fortschrittsdialog sitzt.
+
+**Sicherheit:** Es wird eine heruntergeladene Datei ausgeführt. Deshalb wird nur von
+`https://github.com/fevzyy72/fev-download/releases/download/` geladen (Adresse aus
+der API wird gegen dieses Präfix geprüft), und eine zu kurze oder beschädigte Datei
+wird nie gestartet. Das schützt vor Pannen, nicht vor einem gekaperten
+GitHub-Konto — wer dort Zugriff hat, kann Code ausliefern. Das Konto also mit
+Zwei-Faktor-Anmeldung schützen.
+
+**Jede Fassung wird nur einmal angeboten** (`offered_version` in den Einstellungen);
+der Menüpunkt *Hilfe → Nach Aktualisierung suchen* bleibt, prüft yt-dlp **und** App
+und heißt absichtlich weiter so — `errors.py` verweist Nutzer auf diesen Text.
+
+**yt-dlp still beim Start:** `update.auto_update_ytdlp()`, höchstens einmal in 20 Stunden
+(`update_check.json`). Schlägt es fehl (kein Netz), wird nichts vermerkt — der nächste
+Start versucht es erneut. Stabile Fassungen erscheinen etwa monatlich (gemessen: 14 in
+12 Monaten, längste Pause 84 Tage), die Suche ist also billig. Nachtbauten (`.dev0`)
+holt der Updater absichtlich nicht.
+
+**Noch nicht gegen das echte GitHub erprobt:** der Ablauf „zweites Release →
+Update“ lässt sich erst prüfen, wenn es zwei Fassungen gibt. Getestet sind Antwort,
+Download, Prüfsumme, Installer-Start und Fenster einzeln (`test_appupdate.py`,
+`test_update_gui.py`) sowie der stille Installer über eine laufende Fassung.
+
 ### Einstellungen
 
 Der Zielordner wird nur dann als eigene Entscheidung gewertet, wenn er wirklich
@@ -492,7 +553,7 @@ Resolves Vorschlag kam nie wieder zum Zug. Abgesichert in
 
 ## 6. Tests
 
-`tests/run_tests.ps1` — 15 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
+`tests/run_tests.ps1` — 17 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
 
 **Ein Test muss scheitern können.** `test_preview.py` meldete früher „in Ordnung“,
 wenn keine Vorschau vorhanden war, und beendete sich selbst bei „spielt nicht“ mit
@@ -541,7 +602,8 @@ Das eigentliche Protokoll steht in `%LOCALAPPDATA%\FevDownloader\launcher.log`.
 | Weitergabe | PyInstaller + Inno Setup, eine `.exe` | Ein venv lässt sich nicht verschieben, und niemand installiert erst Python |
 | Installationsort | `%LOCALAPPDATA%\Programs`, ohne Admin | Kein UAC-Fenster; Resolves Scripts-Ordner liegt ohnehin beim Benutzer |
 | ffmpeg im Installer | mitgeliefert statt nachgeladen | Funktioniert sicher, auch wenn gyan.dev einmal nicht erreichbar ist |
-| yt-dlp aktuell halten | Nachladen von PyPI in einen eigenen Ordner | Sonst bräuchte jede YouTube-Änderung einen neuen Installer für alle |
+| yt-dlp aktuell halten | Nachladen von PyPI in einen eigenen Ordner, still beim Start (1×/Tag) | Sonst bräuchte jede YouTube-Änderung einen neuen Installer für alle; die Suche ist billig |
+| App aktuell halten | GitHub-Releases, Angebot beim Start, Installer läuft still drüber | Zielgruppe sind wenige Freunde ohne Python; öffentliches Repo, weil die App sonst nichts abfragen kann |
 
 ---
 

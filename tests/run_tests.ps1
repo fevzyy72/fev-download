@@ -39,6 +39,8 @@ $Offline = @(
     @{ Datei = "test_tiktok_support.py"; Was = "TikTok ohne FPS, Fehlermeldungen und Aktualisierungen" },
     @{ Datei = "test_preview_format.py"; Was = "Vorschau: Formatwahl fuer YouTube, TikTok und andere" },
     @{ Datei = "test_ytdlp_vorrang.py";  Was = "yt-dlp: die neuere Fassung gewinnt (mitgeliefert/nachgeladen)" },
+    @{ Datei = "test_appupdate.py";      Was = "App-Aktualisierung ueber GitHub und stille yt-dlp-Suche" },
+    @{ Datei = "test_update_gui.py";     Was = "Aktualisierung im Fenster: Angebot, Download, Installer" },
     @{ Datei = "test_ipc.py";          Was = "Datenaustausch job.json / result.json" },
     @{ Datei = "test_launcher.py";     Was = "Resolve-Script: Installation und Import" },
     @{ Datei = "smoke_gui.py";         Was = "Oberflaeche: Grundfunktionen" },
@@ -59,7 +61,8 @@ $Online = @(
     @{ Datei = "test_waveform.py";         Was = "Wellenform aus echter Tonspur" },
     @{ Datei = "test_preview_fallback.py"; Was = "Vorschaudatei wirklich laden" },
     @{ Datei = "test_preview.py";          Was = "Stream im Player abspielen" },
-    @{ Datei = "test_segments_netz.py";    Was = "Zwei Ausschnitte wirklich laden" }
+    @{ Datei = "test_segments_netz.py";    Was = "Zwei Ausschnitte wirklich laden" },
+    @{ Datei = "test_selbsttest.py";       Was = "Selbsttest: Analyse, Ausschnitt, Vorschau ohne Fenster" }
 )
 
 $Liste = $Offline

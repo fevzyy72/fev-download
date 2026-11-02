@@ -1,0 +1,56 @@
+Fev Download - Lizenzen und fremde Bestandteile
+===============================================
+
+Fev Download selbst: https://github.com/fevzyy72/fev-download
+
+Dieses Programm enthaelt Software anderer Autoren. Ihre Lizenzen gelten fuer die
+jeweiligen Teile unveraendert weiter.
+
+ffmpeg / ffprobe  (bin\ffmpeg.exe, bin\ffprobe.exe)
+---------------------------------------------------
+Lizenz: GNU General Public License, Version 3 (GPLv3).
+Der mitgelieferte Build stammt von gyan.dev ("release essentials", ffmpeg 9.0)
+und wurde mit --enable-gpl --enable-version3 uebersetzt. Er ist unveraendert; die
+Programme werden nur als eigene Prozesse aufgerufen.
+
+  Lizenztext:  https://www.gnu.org/licenses/gpl-3.0.html
+  Quellcode:   https://ffmpeg.org/download.html
+  Build:       https://www.gyan.dev/ffmpeg/builds/
+  Projekt:     https://ffmpeg.org
+
+Auf Wunsch stellt der Herausgeber den zugehoerigen Quellcode ebenfalls bereit:
+https://github.com/fevzyy72/fev-download
+
+yt-dlp
+------
+Lizenz: The Unlicense (gemeinfrei).  https://github.com/yt-dlp/yt-dlp
+
+Qt / PySide6
+------------
+Lizenz: GNU Lesser General Public License, Version 3 (LGPLv3).
+Die Qt-Bibliotheken liegen als eigene Dateien im Ordner "_internal" und lassen
+sich austauschen.
+  https://www.qt.io/download-open-source
+  https://doc.qt.io/qtforpython-6/
+
+curl_cffi
+---------
+Lizenz: MIT.  https://github.com/lexiforest/curl_cffi
+Enthaelt curl-impersonate (MIT).
+
+Python
+------
+Lizenz: Python Software Foundation License.  https://www.python.org/psf/license/
+
+certifi
+-------
+Lizenz: Mozilla Public License 2.0.  https://github.com/certifi/python-certifi
+
+PyInstaller (Verpackung)
+------------------------
+Lizenz: GPLv2 mit Ausnahme fuer gepackte Programme.  https://pyinstaller.org
+
+Hinweis
+-------
+Fev Download laedt Videos herunter. Bitte nur fuer eigene Inhalte verwenden oder
+fuer Material, dessen Lizenz das erlaubt.

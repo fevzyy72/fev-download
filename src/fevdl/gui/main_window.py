@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QElapsedTimer, QSettings, Qt
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap
+from PySide6.QtCore import QElapsedTimer, QSettings, Qt, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressBar,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import paths
+from ..core import appupdate
 from ..core.models import (
     DownloadRequest,
     Mode,
@@ -48,11 +50,14 @@ from .preview_player import PreviewPlayer
 from .style import STYLESHEET
 from .trim_bar import TrimBar
 from .worker import (
+    AppUpdateWorker,
     DownloadWorker,
     PreviewWorker,
     ProbeWorker,
     ThumbnailWorker,
+    UpdateNotifier,
     WaveformWorker,
+    start_startup_check,
 )
 
 
@@ -73,6 +78,10 @@ class MainWindow(QMainWindow):
         self._preview_worker: Optional[PreviewWorker] = None
         self._preview_file: Optional[Path] = None
         self._preview_attempted_download = False
+        # Aktualisierung der App selbst (siehe core/appupdate.py)
+        self._app_update_worker: Optional[AppUpdateWorker] = None
+        self._app_update_dialog: Optional[QProgressDialog] = None
+        self._update_notifier: Optional[UpdateNotifier] = None
         # Nach einem fertigen Download wird aus dem Knopf ein Abschluss-Knopf,
         # damit man nicht versehentlich dasselbe noch einmal laedt.
         self._completed = False
@@ -276,7 +285,7 @@ class MainWindow(QMainWindow):
         help_menu = menu.addMenu("&Hilfe")
 
         self.action_update_ytdlp = QAction("Nach Aktualisierung suchen", self)
-        self.action_update_ytdlp.triggered.connect(self._update_ytdlp)
+        self.action_update_ytdlp.triggered.connect(self._check_updates)
         help_menu.addAction(self.action_update_ytdlp)
 
         help_menu.addSeparator()
@@ -730,45 +739,196 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self._set_status(f"Ordner laesst sich nicht oeffnen: {exc}", error=True)
 
-    def _update_ytdlp(self) -> None:
+    # ------------------------------------------------------------------
+    # Aktualisierungen
+    # ------------------------------------------------------------------
+
+    def _check_updates(self) -> None:
         """
-        Holt eine neuere yt-dlp-Fassung nach.
+        Sucht nach einem neuen yt-dlp UND einer neuen Fassung der App.
 
         Laeuft bewusst im Vordergrund und nicht in einem eigenen Thread: Es geht
         um wenige Sekunden, der Nutzer hat es selbst angestossen und wartet
         ohnehin auf die Antwort. Ein Thread waere hier nur Maschinerie ohne
-        Gewinn.
+        Gewinn. (Der Download des Installers dagegen laeuft im Thread.)
         """
         from ..core.update import update_ytdlp
 
         self.action_update_ytdlp.setEnabled(False)
-        self._set_status("Suche nach einer neueren Fassung...")
+        self._set_status("Suche nach Aktualisierungen...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
 
-        result = None
-        error = None
+        ytdlp_result = ytdlp_error = release = app_error = None
         try:
-            result = update_ytdlp()
-        except Exception as exc:
-            error = exc
+            try:
+                ytdlp_result = update_ytdlp()
+            except Exception as exc:
+                ytdlp_error = exc
+            try:
+                release = appupdate.check()
+            except Exception as exc:
+                app_error = exc
         finally:
             # Vor der Meldung, sonst steht der Wartezeiger noch im Dialog.
             QApplication.restoreOverrideCursor()
             self.action_update_ytdlp.setEnabled(True)
 
-        if error is not None:
-            self._set_status("Aktualisierung fehlgeschlagen.", error=True)
-            QMessageBox.warning(
-                self,
-                "Aktualisierung fehlgeschlagen",
-                "Die neueste Fassung liess sich nicht holen:\n\n{}\n\n"
-                "Das Programm laeuft mit der bisherigen Fassung weiter.".format(error),
-            )
+        lines = []
+        if ytdlp_result is not None:
+            lines.append("yt-dlp: " + ytdlp_result.message.replace("\n", " "))
+        else:
+            lines.append("yt-dlp: nicht geprueft ({}).".format(ytdlp_error))
+        if release is None and app_error is None:
+            lines.append("Fev Download {} ist aktuell.".format(appupdate.current_version()))
+        elif app_error is not None:
+            lines.append("Fev Download: nicht geprueft ({}).".format(app_error))
+        summary = "\n".join(lines)
+
+        if release is not None:
+            self._offer_app_update(release, extra=summary)
             return
 
-        self._set_status(result.message.splitlines()[0])
-        QMessageBox.information(self, "Aktualisierung", result.message)
+        failed = ytdlp_error is not None or app_error is not None
+        self._set_status(
+            "Aktualisierung unvollstaendig." if failed else "Alles auf dem neuesten Stand.",
+            error=failed,
+        )
+        box = QMessageBox.warning if failed else QMessageBox.information
+        box(self, "Aktualisierung", summary)
+
+    def _offer_app_update(self, release: "appupdate.AppRelease", extra: str = "") -> None:
+        """Fragt, ob die neue Fassung jetzt installiert werden soll."""
+        text = "Version {} von Fev Download ist verfuegbar (installiert: {}).".format(
+            release.version, appupdate.current_version()
+        )
+        if release.notes:
+            text += "\n\n" + release.notes[:600]
+        if extra:
+            text += "\n\n" + extra
+        text += (
+            "\n\nJetzt aktualisieren? Das Fenster schliesst sich kurz "
+            "und oeffnet sich danach von selbst wieder."
+        )
+        answer = QMessageBox.question(
+            self, "Neue Fassung verfuegbar", text, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+        )
+        if answer == QMessageBox.Yes:
+            self._install_app_update(release)
+        else:
+            self._set_status(
+                "Version {} wartet - Hilfe -> Nach Aktualisierung suchen.".format(release.version)
+            )
+
+    def _install_app_update(self, release: "appupdate.AppRelease") -> None:
+        """Laedt den Installer, startet ihn und beendet die App."""
+        if not paths.IS_FROZEN:
+            # Aus dem Quelltext gestartet (Entwicklung): ein Installer waere hier
+            # fehl am Platz, er wuerde eine zweite Kopie anlegen.
+            QDesktopServices.openUrl(QUrl(release.page))
+            self._set_status("Die Seite der neuen Fassung wurde im Browser geoeffnet.")
+            return
+
+        if self._download_worker is not None and self._download_worker.isRunning():
+            QMessageBox.information(
+                self,
+                "Download laeuft",
+                "Es laeuft noch ein Download. Bitte erst abwarten, dann aktualisieren.",
+            )
+            return
+        if self._app_update_worker is not None and self._app_update_worker.isRunning():
+            return
+
+        dialog = QProgressDialog(
+            "Version {} wird geladen...".format(release.version), "Abbrechen", 0, 100, self
+        )
+        dialog.setWindowTitle("Aktualisierung")
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.setMinimumDuration(0)
+        dialog.setAutoClose(False)
+        dialog.setAutoReset(False)
+        dialog.setValue(0)
+        self._app_update_dialog = dialog
+
+        worker = AppUpdateWorker(release, parent=self)
+        worker.progress.connect(dialog.setValue)
+        worker.succeeded.connect(self._on_app_update_downloaded)
+        worker.failed.connect(self._on_app_update_failed)
+        dialog.canceled.connect(worker.cancel)
+        self._app_update_worker = worker
+        dialog.show()
+        worker.start()
+
+    def _close_update_dialog(self) -> None:
+        dialog = self._app_update_dialog
+        self._app_update_dialog = None
+        if dialog is not None:
+            # Sonst meldet schon das Schliessen "abgebrochen".
+            try:
+                dialog.canceled.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            dialog.close()
+            dialog.deleteLater()
+
+    def _on_app_update_downloaded(self, installer: Path) -> None:
+        self._close_update_dialog()
+        try:
+            appupdate.launch_installer(installer)
+        except Exception as exc:
+            self._on_app_update_failed(
+                "Der Installer liess sich nicht starten:\n{}\n\nDatei: {}".format(exc, installer)
+            )
+            return
+        self._set_status("Die Aktualisierung laeuft - das Fenster oeffnet sich gleich wieder.")
+        # Der Installer wartet nicht auf uns, schliesst die App aber notfalls selbst.
+        self.close()
+
+    def _on_app_update_failed(self, message: str) -> None:
+        self._close_update_dialog()
+        self._set_status("Aktualisierung fehlgeschlagen.", error=True)
+        QMessageBox.warning(
+            self,
+            "Aktualisierung fehlgeschlagen",
+            "{}\n\nDas Programm laeuft mit der bisherigen Fassung weiter. "
+            "Die neue Fassung gibt es auch von Hand:\n{}".format(message, appupdate.RELEASES_PAGE),
+        )
+
+    def start_background_update_check(self) -> None:
+        """
+        Prueft beim Start im Hintergrund, ohne etwas zu stoeren.
+
+        yt-dlp: still, hoechstens einmal am Tag. App: nur ein Angebot, und jede
+        Fassung wird einmal angeboten - wer 'Spaeter' sagt, wird nicht bei jedem
+        Start gefragt (der Menuepunkt bleibt).
+
+        Nur im installierten Programm: Aus dem Quelltext (Entwicklung) wuerde das
+        mit jedem Commit zum Rauschen. FEVDL_UPDATE_CHECK=1 erzwingt es,
+        FEVDL_NO_UPDATE_CHECK=1 unterdrueckt es.
+        """
+        if os.environ.get("FEVDL_NO_UPDATE_CHECK"):
+            return
+        if not paths.IS_FROZEN and not os.environ.get("FEVDL_UPDATE_CHECK"):
+            return
+        notifier = UpdateNotifier(self)
+        notifier.ytdlpUpdated.connect(self._on_ytdlp_updated)
+        notifier.appUpdateFound.connect(self._on_app_update_found)
+        self._update_notifier = notifier
+        start_startup_check(notifier)
+
+    def _on_ytdlp_updated(self, version: str) -> None:
+        self._set_status("yt-dlp {} wurde geladen und gilt ab dem naechsten Start.".format(version))
+
+    def _on_app_update_found(self, release: "appupdate.AppRelease") -> None:
+        busy = self._download_worker is not None and self._download_worker.isRunning()
+        already_offered = self._settings.value("offered_version", "", type=str) == release.version
+        if busy or already_offered:
+            self._set_status(
+                "Version {} ist verfuegbar - Hilfe -> Nach Aktualisierung suchen.".format(release.version)
+            )
+            return
+        self._settings.setValue("offered_version", release.version)
+        self._offer_app_update(release)
 
     def _show_about(self) -> None:
         from .. import __version__
@@ -784,8 +944,11 @@ class MainWindow(QMainWindow):
             "yt-dlp {}\n"
             "Laesst eine Plattform sich nicht mehr laden, hilft meist\n"
             "Hilfe -> Nach Aktualisierung suchen.\n\n"
+            "https://github.com/{}\n"
+            "Fremde Bestandteile und ihre Lizenzen (u. a. ffmpeg, GPLv3): "
+            "siehe LIZENZEN.txt im Programmordner.\n\n"
             "Bitte nur fuer eigene Inhalte verwenden oder fuer Material, dessen "
-            "Lizenz das erlaubt.".format(__version__, current_version()),
+            "Lizenz das erlaubt.".format(__version__, current_version(), appupdate.GITHUB_REPO),
         )
 
     # ------------------------------------------------------------------

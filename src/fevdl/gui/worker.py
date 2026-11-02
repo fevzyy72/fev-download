@@ -13,13 +13,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
-from PySide6.QtCore import QMutex, QMutexLocker, QThread, QWaitCondition, Signal
+from PySide6.QtCore import QMutex, QMutexLocker, QObject, QThread, QWaitCondition, Signal
 
+from ..core import appupdate
 from ..core.download import download, download_preview
 from ..core.errors import CancelledError, FevError
 from ..core.models import DownloadRequest, Progress
 from ..core.probe import probe
 from ..core.thumbs import ensure_thumbnail
+from ..core.update import auto_update_ytdlp
 from ..core.waveform import extract_peaks
 
 # Wie viele Ausschnitte gleichzeitig geladen werden. Gemessen: bei drei blieb
@@ -328,3 +330,77 @@ class DownloadWorker(QThread):
             )
 
         return report
+
+
+class UpdateNotifier(QObject):
+    """
+    Meldet dem Fenster, was die Pruefung beim Start gefunden hat.
+
+    Die Pruefung selbst laeuft in einem gewoehnlichen Thread (siehe
+    start_startup_check), nicht in einem QThread: Haengt das Netz, soll das
+    Schliessen des Fensters nicht darauf warten muessen. Ein QThread muesste
+    beim Beenden abgewartet werden, ein 'daemon'-Thread wird einfach beendet.
+    """
+
+    ytdlpUpdated = Signal(str)       # neue yt-dlp-Fassung, gilt ab dem naechsten Start
+    appUpdateFound = Signal(object)  # AppRelease
+
+
+def run_startup_checks(notifier: UpdateNotifier, check_app: bool = True, check_ytdlp: bool = True) -> None:
+    """Beide Suchen nacheinander. Fehler bleiben still - das ist nur ein Angebot."""
+    try:
+        if check_ytdlp:
+            result = auto_update_ytdlp()
+            if result is not None and result.changed:
+                notifier.ytdlpUpdated.emit(result.version)
+        if check_app:
+            release = appupdate.check()
+            if release is not None:
+                notifier.appUpdateFound.emit(release)
+    except RuntimeError:
+        # Das Fenster wurde waehrenddessen geschlossen und der Melder mit ihm.
+        pass
+    except Exception:
+        pass
+
+
+def start_startup_check(notifier: UpdateNotifier, **kwargs) -> threading.Thread:
+    thread = threading.Thread(
+        target=run_startup_checks,
+        args=(notifier,),
+        kwargs=kwargs,
+        name="fevdl-update-check",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
+class AppUpdateWorker(QThread):
+    """Laedt den Installer einer neuen Fassung herunter und prueft ihn."""
+
+    progress = Signal(int)       # 0..100
+    succeeded = Signal(object)   # Path des Installers
+    failed = Signal(str)
+
+    def __init__(self, release: "appupdate.AppRelease", parent=None) -> None:
+        super().__init__(parent)
+        self._release = release
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        self._cancel_requested = True
+
+    def run(self) -> None:
+        try:
+            path = appupdate.download_installer(
+                self._release,
+                on_progress=self.progress.emit,
+                should_cancel=lambda: self._cancel_requested,
+            )
+            self.succeeded.emit(path)
+        except appupdate.UpdateError as exc:
+            if not self._cancel_requested:
+                self.failed.emit(str(exc))
+        except Exception as exc:
+            self.failed.emit(f"Unerwarteter Fehler: {exc}")

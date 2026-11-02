@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -132,6 +133,18 @@ def update_ytdlp() -> UpdateResult:
             message="Bereits auf dem neuesten Stand ({}).".format(running),
         )
 
+    # Schon geholt, wartet aber auf den Neustart: nicht noch einmal laden.
+    waiting = paths.installed_ytdlp_version()
+    if waiting is not None and paths.version_key(waiting) >= paths.version_key(newest):
+        return UpdateResult(
+            changed=False,
+            version=waiting,
+            message=(
+                "Die neueste Fassung ({}) ist bereits geladen.\n"
+                "Wirksam wird sie beim naechsten Start von Fev Download.".format(waiting)
+            ),
+        )
+
     _extract_wheel(_fetch(wheel_url), paths.YTDLP_DIR)
 
     return UpdateResult(
@@ -144,3 +157,55 @@ def update_ytdlp() -> UpdateResult:
             )
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Stille Pruefung beim Start
+# ---------------------------------------------------------------------------
+
+# Einmal am Tag genuegt: stabile Fassungen erscheinen etwa monatlich. Etwas unter
+# 24 Stunden, damit ein Start zur gleichen Uhrzeit am Folgetag nicht knapp
+# durchfaellt.
+CHECK_INTERVAL_SECONDS = 20 * 3600
+
+
+def due_for_check(now: float | None = None) -> bool:
+    """True, wenn die letzte Suche lange genug her ist (oder es keine gab)."""
+    moment = time.time() if now is None else now
+    try:
+        data = json.loads(paths.UPDATE_CHECK_FILE.read_text(encoding="utf-8-sig"))
+        last = float(data.get("ytdlp_checked", 0))
+    except (OSError, ValueError, AttributeError, TypeError):
+        return True
+    # Eine Uhrzeit in der Zukunft (Uhr umgestellt) zaehlt als abgelaufen.
+    return last > moment or moment - last >= CHECK_INTERVAL_SECONDS
+
+
+def mark_checked(now: float | None = None) -> None:
+    """Haelt fest, dass gerade gesucht wurde. Darf nie den Start stoeren."""
+    try:
+        paths.ensure_dir(paths.UPDATE_CHECK_FILE.parent)
+        paths.UPDATE_CHECK_FILE.write_text(
+            json.dumps({"ytdlp_checked": time.time() if now is None else now}),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def auto_update_ytdlp() -> UpdateResult | None:
+    """
+    Die Suche beim Start: still, hoechstens einmal am Tag, nie mit Fehlermeldung.
+
+    Rueckgabe: das Ergebnis, wenn gesucht wurde - sonst None. Schlaegt die Suche
+    fehl (kein Netz, PyPI nicht erreichbar), wird NICHT als erledigt vermerkt:
+    Beim naechsten Start wird erneut versucht, statt einen Tag zu verlieren.
+    """
+    if not due_for_check():
+        return None
+    try:
+        result = update_ytdlp()
+    except Exception:
+        return None
+    mark_checked()
+    return result

@@ -58,14 +58,24 @@ Startmenü. Die heruntergeladenen Videos bleiben dabei erhalten.
 - DaVinci Resolve — nur für den Import in den Media Pool. Ohne Resolve
   funktioniert alles andere genauso, die Dateien landen dann im gewählten Ordner.
 
-## Wenn eine Plattform nicht mehr geht
+## Aktuell bleiben
 
-YouTube und die anderen ändern regelmäßig etwas an ihren Seiten. Das Werkzeug
-dahinter (`yt-dlp`) zieht meist binnen Tagen nach — die mitgelieferte Fassung
-ist aber auf den Stand eingefroren, an dem das Programm gebaut wurde.
+Fev Download hält sich selbst auf dem neuesten Stand — an zwei Stellen:
 
-Deshalb: **Hilfe → Nach Aktualisierung suchen.** Das holt die neueste Fassung
-und wirkt beim nächsten Start. Ein neuer Installer ist dafür nicht nötig.
+- **yt-dlp** (das Werkzeug hinter den Downloads): YouTube und die anderen ändern
+  regelmäßig etwas an ihren Seiten, yt-dlp zieht meist binnen Tagen nach. Die App
+  sucht deshalb beim Start still, höchstens einmal am Tag, und lädt eine neuere
+  Fassung nach. Sie gilt ab dem nächsten Start. Ein neuer Installer ist dafür nicht
+  nötig.
+- **Die App selbst:** Gibt es eine neue Fassung, fragt die App beim Start, ob sie
+  sie installieren soll. Ein Klick genügt: Das Fenster schließt sich kurz und
+  öffnet sich von selbst wieder. Jede Fassung wird nur einmal angeboten; wer
+  „Nein“ sagt, wird nicht bei jedem Start gefragt.
+
+Von Hand: **Hilfe → Nach Aktualisierung suchen** prüft beides sofort.
+
+Die neuen Fassungen liegen unter
+[Releases](https://github.com/fevzyy72/fev-download/releases/latest).
 
 **TikTok mit einer älteren App:** Ein yt-dlp-Update allein reicht hier nicht.
 Ab Fev Download **1.0.1** enthält der Installer zusätzlich die von yt-dlp
@@ -190,6 +200,7 @@ davinciplugin/
 ├── install_plugin.ps1        Einbindung in Resolve
 ├── run_gui.ps1               Oberfläche starten (Entwicklung)
 ├── build_installer.ps1       Baut FevDownloadSetup.exe zum Weitergeben
+├── release.ps1               Testet, baut und veröffentlicht eine neue Fassung auf GitHub
 ├── fevdl.spec                Bauplan für PyInstaller
 ├── installer/FevDownload.iss Bauplan für den Installer
 ├── launch.pyw                Startet die Oberfläche ohne Konsolenfenster
@@ -283,6 +294,22 @@ weitergegeben wird. Nötig sind dafür PyInstaller
 (`.venv\Scripts\python.exe -m pip install pyinstaller`) und
 [Inno Setup 6](https://jrsoftware.org/isdl.php).
 
+### Neue Fassung veröffentlichen
+
+Die installierten Programme holen sich Aktualisierungen von den *Releases* dieses
+Repositorys. Eine neue Fassung zu veröffentlichen ist ein Befehl:
+
+```powershell
+# 1. Fassungsnummer in src\fevdl\__init__.py erhöhen und alles committen
+# 2. Dann:
+powershell -ExecutionPolicy Bypass -File release.ps1 -Notizen "Was ist neu"
+```
+
+`release.ps1` führt die Tests aus, baut den Installer, lädt den Stand nach GitHub
+und legt das Release samt `FevDownloadSetup.exe` an. Nötig ist das
+GitHub-CLI (`winget install GitHub.cli`, einmalig `gh auth login`). Der Name der
+Datei im Release muss `FevDownloadSetup.exe` bleiben — die App sucht genau danach.
+
 ### Tests
 
 ```powershell
@@ -290,10 +317,11 @@ powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1 -MitNetz
 ```
 
-15 Testdateien laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
+17 Testdateien laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
 decken Datenaustausch, Oberfläche, das Resolve-Script, Hochformat, mehrere
 Ausschnitte, TikTok-Metadaten ohne FPS, die Formatwahl der Vorschau, den Vorrang
-von yt-dlp-Fassungen und sauberes Beenden ab. Mit `-MitNetz`
+von yt-dlp-Fassungen, die Aktualisierung (GitHub, Installer, Fenster) und sauberes
+Beenden ab. Mit `-MitNetz`
 kommen fünf Testdateien dazu, die wirklich etwas laden. Der TikTok-Test prüft
 Vorschau, ganzen Clip, genauen Ausschnitt und reine Tonspur. Ein eigener Link
 lässt sich mit `python tests/test_tiktok_download.py "<TikTok-Link>"` prüfen.

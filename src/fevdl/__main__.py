@@ -45,9 +45,19 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Pfad zur job.json, die DaVinci Resolve geschrieben hat",
     )
+    parser.add_argument(
+        "--selbsttest",
+        action="store_true",
+        help="Analyse, kurzer Download und Vorschau ohne Fenster; Ergebnis in selbsttest.txt",
+    )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
-    job = read_job(Path(args.job)) if args.job else None
+    if args.selbsttest:
+        from . import selftest
+
+        return selftest.run()
+
+    job =read_job(Path(args.job)) if args.job else None
 
     _claim_taskbar_identity()
 
@@ -63,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
 
     window = MainWindow(job=job)
     window.show()
+    # Erst nach dem Anzeigen: Die Suche nach Aktualisierungen laeuft im
+    # Hintergrund und darf den Start nicht aufhalten. Sie steht hier und nicht im
+    # MainWindow, damit die Tests (die MainWindow selbst bauen) nie ins Netz gehen.
+    window.start_background_update_check()
     return app.exec()
 
 

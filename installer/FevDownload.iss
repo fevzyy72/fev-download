@@ -50,6 +50,10 @@ Compression=lzma2/max
 SolidCompression=yes
 LZMANumBlockThreads=2
 WizardStyle=modern
+; Laeuft die App noch, schliesst Setup sie (still: ohne Rueckfrage). Neu gestartet
+; wird sie ausdruecklich ueber [Run], nicht ueber den Neustart-Manager.
+CloseApplications=yes
+RestartApplications=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -77,6 +81,10 @@ Source: "{#ProjectDir}\resolve\FevDownloader.py"; DestDir: "{userappdata}\Blackm
 
 Source: "{#ProjectDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
+; Lizenzen der fremden Bestandteile - vor allem ffmpeg ist ein GPLv3-Build und
+; darf nur mit diesem Hinweis weitergegeben werden.
+Source: "LIZENZEN.txt"; DestDir: "{app}"; Flags: ignoreversion
+
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\assets\fevdl.ico"
 Name: "{group}\{#AppName} deinstallieren"; Filename: "{uninstallexe}"
@@ -84,6 +92,10 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename:
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Fev Download jetzt starten"; Flags: nowait postinstall skipifsilent
+; Aktualisiert sich die App selbst (core/appupdate.py), laeuft der Installer
+; still. Dann gibt es keine Abschlussseite mit dem Haken oben - die App wuerde
+; nach dem Update einfach verschwinden. Diese Zeile startet sie wieder.
+Filename: "{app}\{#AppExeName}"; Flags: nowait skipifnotsilent
 
 [UninstallDelete]
 ; Das Script in Resolve gehoert zu dieser Installation und hat ohne sie keinen
@@ -93,6 +105,7 @@ Type: files; Name: "{localappdata}\FevDownloader\install.json"
 Type: files; Name: "{localappdata}\FevDownloader\job.json"
 Type: files; Name: "{localappdata}\FevDownloader\result.json"
 Type: files; Name: "{localappdata}\FevDownloader\launcher.log"
+Type: files; Name: "{localappdata}\FevDownloader\update_check.json"
 ; Heruntergeladene Videos bleiben bewusst liegen - sie gehoeren dem Nutzer.
 
 [Code]
