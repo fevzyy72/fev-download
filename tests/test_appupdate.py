@@ -212,6 +212,9 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(command[0], r"C:\x\FevDownloadSetup-1.1.0.exe")
         for flag in ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"):
             self.assertIn(flag, command)
+        # Ohne Erzwingen bricht der Installer ab, wenn die App beim Pruefen noch
+        # laeuft - gemessen, siehe launch_installer.
+        self.assertIn("/FORCECLOSEAPPLICATIONS", command)
         # Ohne DETACHED_PROCESS wuerde der Installer mit der App sterben.
         self.assertTrue(kwargs["creationflags"] & 0x00000008)
         self.assertNotIn("/VERYSILENT", command, "Der Fortschrittsbalken soll sichtbar sein")

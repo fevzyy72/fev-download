@@ -223,12 +223,19 @@ def launch_installer(installer: Path) -> None:
     Startet den Installer still ueber die vorhandene Installation.
 
     /SILENT zeigt einen kleinen Fortschrittsbalken, aber keine Fragen - so sieht
-    man, dass etwas passiert, waehrend die App weg ist. /CLOSEAPPLICATIONS
-    schliesst die App, falls sie noch laeuft. Danach startet der Installer die
-    App wieder.
+    man, dass etwas passiert, waehrend die App weg ist. Danach startet der
+    Installer die App wieder.
+
+    /FORCECLOSEAPPLICATIONS ist wichtig: Die App beendet sich zwar selbst, aber
+    der Installer prueft schon nach einem Sekundenbruchteil, ob noch etwas laeuft.
+    Ohne das Erzwingen versucht er, die App ueber den Neustart-Manager zu
+    schliessen, scheitert daran und bricht im stillen Modus kommentarlos ab
+    ("Some applications could not be shut down. Defaulting to Abort"). Gemessen:
+    ohne das Flag wurde nichts installiert, mit Flag in 14 s.
     """
     subprocess.Popen(
-        [str(installer), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+        [str(installer), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+         "/CLOSEAPPLICATIONS", "/FORCECLOSEAPPLICATIONS"],
         creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
         stdin=subprocess.DEVNULL,

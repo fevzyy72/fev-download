@@ -50,9 +50,12 @@ Compression=lzma2/max
 SolidCompression=yes
 LZMANumBlockThreads=2
 WizardStyle=modern
-; Laeuft die App noch, schliesst Setup sie (still: ohne Rueckfrage). Neu gestartet
-; wird sie ausdruecklich ueber [Run], nicht ueber den Neustart-Manager.
-CloseApplications=yes
+; Laeuft die App noch, schliesst Setup sie - und zwar notfalls erzwungen. Der
+; Neustart-Manager erreicht die App nicht zuverlaessig; im stillen Modus (so
+; aktualisiert sich die App selbst) bricht Setup dann kommentarlos ab. Neu
+; gestartet wird die App ausdruecklich ueber [Run], nicht ueber den
+; Neustart-Manager.
+CloseApplications=force
 RestartApplications=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

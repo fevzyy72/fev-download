@@ -507,6 +507,15 @@ darf die App nicht enthalten.
 Abschlussseite, hat `skipifsilent`). Ohne sie verschwände die App nach dem Update
 einfach. `RestartApplications=no`, damit nichts doppelt startet.
 
+**Schließen erzwingen — sonst passiert nichts.** Der Installer prüft schon nach
+~0,4 s, ob die App noch läuft. Der Neustart-Manager erreicht sie nicht (im Test
+„Some applications could not be shut down. Defaulting to Abort“), und im stillen
+Modus bricht Setup dann **kommentarlos ab**: kein Update, die App läuft einfach weiter.
+Deshalb `/FORCECLOSEAPPLICATIONS` in `launch_installer()` **und** `CloseApplications=force`
+im `.iss`. Gemessen: mit Flag 14 s bis „installiert“, alte App beendet, neue gestartet.
+Beim Testen **nie** `Start-Process -Wait` auf den Installer anwenden: PowerShell 5.1 wartet
+dann auch auf die vom Installer neu gestartete App und hängt ewig.
+
 **Wo das nicht hinfliegen darf:**
 - Die Prüfung beim Start steht in `__main__.py` (`window.start_background_update_check()`),
   **nicht** im `MainWindow`-Konstruktor — sonst gingen alle Oberflächen-Tests ins Netz.
