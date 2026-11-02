@@ -36,6 +36,7 @@ Write-Host "    OK" -ForegroundColor Green
 
 # Ohne Netz -------------------------------------------------------------
 $Offline = @(
+    @{ Datei = "test_tiktok_support.py"; Was = "TikTok ohne FPS, Fehlermeldungen und Aktualisierungen" },
     @{ Datei = "test_ipc.py";          Was = "Datenaustausch job.json / result.json" },
     @{ Datei = "test_launcher.py";     Was = "Resolve-Script: Installation und Import" },
     @{ Datei = "smoke_gui.py";         Was = "Oberflaeche: Grundfunktionen" },
@@ -52,6 +53,7 @@ $Offline = @(
 
 # Mit Netz --------------------------------------------------------------
 $Online = @(
+    @{ Datei = "test_tiktok_download.py"; Was = "TikTok: Vorschau, Video, Ausschnitt und Ton wirklich laden" },
     @{ Datei = "test_waveform.py";         Was = "Wellenform aus echter Tonspur" },
     @{ Datei = "test_preview_fallback.py"; Was = "Vorschaudatei wirklich laden" },
     @{ Datei = "test_preview.py";          Was = "Stream im Player abspielen" },

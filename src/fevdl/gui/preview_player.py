@@ -12,9 +12,10 @@ schwarzen Balken zu verschwinden.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QRect, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -33,6 +34,55 @@ from ..core.models import format_timecode
 from . import typography
 
 STAGE_COLOR = QColor("#141414")
+
+
+class _AspectStage(QWidget):
+    """Passt das ganze Bild in den verfuegbaren Platz, ohne schwarze Restflaeche.
+
+    Die Geometrie wird ausdruecklich gesetzt: Ein Maximum mit seitlichen
+    Dehnungen laesst Qt das Video auf seine kleinste Breite zusammenschieben.
+    Ausserdem darf die Originalaufloesung nicht zur Mindestgroesse der GUI werden.
+    """
+
+    def __init__(self, stack: QStackedWidget, parent=None) -> None:
+        super().__init__(parent)
+        self._stack = stack
+        self._stack.setParent(self)
+        self._aspect = 16 / 9
+        self.setMinimumHeight(240)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._stack.currentChanged.connect(self._fit_video)
+
+    def sizeHint(self) -> QSize:
+        return QSize(480, 270)
+
+    def set_aspect(self, aspect: float) -> None:
+        self._aspect = aspect
+        self._fit_video()
+
+    def _fit_video(self, *_args) -> None:
+        area = self.contentsRect()
+        if area.isEmpty():
+            return
+        if self._stack.currentIndex() == 0:
+            # Lade- und Fehlermeldungen brauchen Platz fuer lesbaren Text.
+            self._stack.setGeometry(area)
+            return
+
+        width, height = area.width(), area.height()
+        if width / height > self._aspect:
+            width = max(1, round(height * self._aspect))
+        else:
+            height = max(1, round(width / self._aspect))
+        self._stack.setGeometry(QRect(
+            area.x() + (area.width() - width) // 2,
+            area.y() + (area.height() - height) // 2,
+            width, height,
+        ))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fit_video()
 
 
 class PreviewPlayer(QWidget):
@@ -54,6 +104,9 @@ class PreviewPlayer(QWidget):
         self._player.setAudioOutput(self._audio)
 
         self._video = QVideoWidget(self)
+        self._video.setAspectRatioMode(Qt.KeepAspectRatio)
+        # Die natuerliche Groesse (z. B. 1080x1920) ist kein GUI-Mindestmass.
+        self._video.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         # Der Rand neben dem Bild soll dunkel bleiben, nicht in Systemgrau
         # aufblitzen. QVideoWidget folgt keinem Stylesheet, daher per Palette.
         palette = self._video.palette()
@@ -70,19 +123,8 @@ class PreviewPlayer(QWidget):
         self._stack = QStackedWidget(self)
         self._stack.addWidget(self._placeholder)
         self._stack.addWidget(self._video)
-        self._stack.setMinimumHeight(240)
-
-        self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # Die beiden Dehnungen links und rechts halten die Flaeche bei
-        # Hochformat in der Mitte. Im Querformat muessen sie abgeschaltet
-        # werden, sonst quetschen sie das Bild auf seine Mindestbreite.
-        self._stage = QHBoxLayout()
-        self._stage.setContentsMargins(0, 0, 0, 0)
-        self._stage.setSpacing(0)
-        self._stage.addStretch(0)
-        self._stage.addWidget(self._stack, 1)
-        self._stage.addStretch(0)
+        self._stack.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._stage = _AspectStage(self._stack, self)
 
         self._play_button = QPushButton("Abspielen")
         self._play_button.setObjectName("quiet")
@@ -110,13 +152,16 @@ class PreviewPlayer(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        layout.addLayout(self._stage, 1)
+        layout.addWidget(self._stage, 1)
         layout.addLayout(controls)
 
         self._player.positionChanged.connect(self._on_position_changed)
         self._player.durationChanged.connect(self._on_duration_changed)
         self._player.playbackStateChanged.connect(self._on_state_changed)
         self._player.errorOccurred.connect(self._on_error)
+        # Metadaten sind nur eine Vorgabe. Die abgespielte Vorschau kann ein
+        # anderes Format haben oder eine Drehung enthalten.
+        self._video.videoSink().videoSizeChanged.connect(self._on_video_size_changed)
 
         self._fallback_duration = 0.0
 
@@ -126,33 +171,16 @@ class PreviewPlayer(QWidget):
         """
         Legt das Seitenverhaeltnis der Quelle fest.
 
-        Bei Hochformat wird die Flaeche in der Breite begrenzt, damit das Bild
-        die volle Hoehe nutzt statt klein zwischen schwarzen Raendern zu sitzen.
+        Die Bildflaeche nutzt den groesstmoeglichen passenden Ausschnitt der
+        freien Flaeche. Das ganze Video bleibt sichtbar und unverzerrt.
         """
-        self._aspect = aspect if aspect and aspect > 0 else 16 / 9
-        self._apply_stage_width()
+        self._aspect = aspect if aspect and math.isfinite(aspect) and aspect > 0 else 16 / 9
+        self._stage.set_aspect(self._aspect)
 
-    def _apply_stage_width(self) -> None:
-        height = self._stack.height()
-        if height <= 0:
-            height = self._stack.minimumHeight()
-
-        if self._aspect < 0.95:  # Hochformat
-            self._stack.setMaximumWidth(max(220, int(height * self._aspect)))
-            # Aussen dehnen, damit die schmale Flaeche mittig sitzt.
-            self._stage.setStretch(0, 1)
-            self._stage.setStretch(1, 0)
-            self._stage.setStretch(2, 1)
-        else:
-            self._stack.setMaximumWidth(16777215)  # keine Begrenzung
-            # Innen dehnen, damit das Bild die volle Breite bekommt.
-            self._stage.setStretch(0, 0)
-            self._stage.setStretch(1, 1)
-            self._stage.setStretch(2, 0)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._apply_stage_width()
+    def _on_video_size_changed(self) -> None:
+        size = self._video.videoSink().videoSize()
+        if size.width() > 0 and size.height() > 0:
+            self.set_aspect(size.width() / size.height())
 
     # -- Steuerung ----------------------------------------------------------
 

@@ -12,7 +12,8 @@ gewünschten Ausschnitt heraus und übergibt ihn direkt an DaVinci Resolve.
   Geht das nicht (TikTok und einige andere geben ihre Adressen nur mit besonderen
   Kopfdaten heraus), lädt die App still eine kleine Datei und spielt diese ab
 - **Hochformat wird richtig dargestellt** — TikTok, Reels und Shorts bekommen eine hohe,
-  schmale Bildfläche statt klein zwischen zwei schwarzen Balken zu sitzen
+  große Bildfläche im richtigen Seitenverhältnis. Die Vorschau nutzt den verfügbaren
+  Platz, ohne zusätzliche schwarze Balken, Verzerrung oder abgeschnittene Bildränder
 - **Ausschnitt wählen** — Anfang und Ende ziehen oder als Zeit eintippen; geschnitten
   wird bereits beim Laden, ein 30-Sekunden-Ausschnitt aus einem Zweistünder zieht also
   nur einen Bruchteil der Daten
@@ -65,6 +66,12 @@ ist aber auf den Stand eingefroren, an dem das Programm gebaut wurde.
 
 Deshalb: **Hilfe → Nach Aktualisierung suchen.** Das holt die neueste Fassung
 und wirkt beim nächsten Start. Ein neuer Installer ist dafür nicht nötig.
+
+**TikTok mit einer älteren App:** Ein yt-dlp-Update allein reicht hier nicht.
+Ab Fev Download **1.0.1** enthält der Installer zusätzlich die von yt-dlp
+benötigte Browser-Netzwerkbibliothek (`curl_cffi`). Bei einer älteren Installation
+einmal den aktuellen Installer ausführen. Videos ohne FPS-Angabe werden jetzt
+ebenfalls richtig als Video erkannt und lassen sich mit Bild und Ton laden.
 
 ## Benutzung
 
@@ -283,10 +290,12 @@ powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1 -MitNetz
 ```
 
-Zwölf Tests laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
+13 Testdateien laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
 decken Datenaustausch, Oberfläche, das Resolve-Script, Hochformat, mehrere
-Ausschnitte und sauberes Beenden ab. Mit `-MitNetz` kommen vier Tests dazu, die
-wirklich etwas laden.
+Ausschnitte, TikTok-Metadaten ohne FPS und sauberes Beenden ab. Mit `-MitNetz`
+kommen fünf Testdateien dazu, die wirklich etwas laden. Der TikTok-Test prüft
+Vorschau, ganzen Clip, genauen Ausschnitt und reine Tonspur. Ein eigener Link
+lässt sich mit `python tests/test_tiktok_download.py "<TikTok-Link>"` prüfen.
 
 ### Download-Motor ohne Oberfläche prüfen
 

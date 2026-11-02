@@ -18,6 +18,7 @@ wuerde in den Installationsordner schreiben wollen.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -67,18 +68,20 @@ def current_version() -> str:
     """
     Die Fassung, die gerade tatsaechlich gilt.
 
-    Bevorzugt die nachgeladene; sonst die mitgelieferte, direkt beim Paket
-    erfragt.
+    Wird direkt beim geladenen Paket erfragt. Eine gerade erst nachgeladene
+    Fassung gilt noch nicht im laufenden Prozess.
     """
-    updated = paths.installed_ytdlp_version()
-    if updated:
-        return updated
     try:
         from yt_dlp.version import __version__ as bundled
 
         return bundled
     except Exception:
         return "unbekannt"
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """PyPI schreibt 2026.8.19, yt-dlp selbst 2026.08.19: dieselbe Fassung."""
+    return tuple(int(part) for part in re.findall(r"\d+", version))
 
 
 def _extract_wheel(wheel: bytes, target: Path) -> None:
@@ -128,7 +131,7 @@ def update_ytdlp() -> UpdateResult:
     running = current_version()
     newest, wheel_url = latest_version()
 
-    if newest == running:
+    if _version_key(newest) <= _version_key(running):
         return UpdateResult(
             changed=False,
             version=running,

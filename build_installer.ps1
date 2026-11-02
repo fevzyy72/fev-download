@@ -65,6 +65,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Ok "PyInstaller vorhanden."
 
+# Sonst liesse sich ein Installer bauen, der zwar startet, aber TikTok nicht
+# abrufen kann. Das nachgeladene reine Python-Paket ersetzt curl_cffi nicht.
+& $VenvPython -c "from yt_dlp import YoutubeDL; ydl = YoutubeDL({'quiet': True}); assert ydl._get_available_impersonate_targets(), 'Browser-Netzwerkbibliothek fehlt'; ydl.close()"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "TikTok-Abhaengigkeiten fehlen. Nachholen mit:" -ForegroundColor Red
+    Write-Host "  .venv\Scripts\python.exe -m pip install -r requirements.txt" -ForegroundColor Red
+    exit 1
+}
+Write-Ok "Browser-Netzwerkbibliothek fuer TikTok vorhanden."
+
 # Inno Setup wird sowohl fuer den Benutzer als auch systemweit installiert -
 # beide Orte pruefen.
 $IsccCandidates = @(
@@ -114,8 +124,13 @@ Set-Location $ProjectRoot
 # etwa ein von Hand hineinkopiertes bin\ - und der Installer packte ffmpeg
 # doppelt ein: einmal aus dist\, einmal aus bin\.
 $PackedDir = Join-Path $DistDir "FevDownload"
-if (Test-Path $PackedDir) {
-    Remove-Item $PackedDir -Recurse -Force
+$ResolvedPackedDir = [System.IO.Path]::GetFullPath($PackedDir)
+$ResolvedDistDir = [System.IO.Path]::GetFullPath($DistDir)
+if ([System.IO.Path]::GetDirectoryName($ResolvedPackedDir) -ne $ResolvedDistDir) {
+    throw "Ungueltiger Zielordner fuer den Build: $ResolvedPackedDir"
+}
+if (Test-Path -LiteralPath $ResolvedPackedDir) {
+    Remove-Item -LiteralPath $ResolvedPackedDir -Recurse -Force
 }
 
 & $VenvPython -m PyInstaller --noconfirm --clean $SpecFile

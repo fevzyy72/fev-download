@@ -2,7 +2,7 @@
 
 from . import paths
 
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 
 # Muss hier stehen und nirgends sonst: probe.py und download.py binden yt_dlp
 # auf Modulebene ein. Sobald irgendein Teil von fevdl geladen wird, ist es also

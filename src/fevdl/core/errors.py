@@ -24,6 +24,19 @@ def humanize(raw_message: str) -> str:
     text = (raw_message or "").strip()
     lowered = text.lower()
 
+    if "[tiktok]" in lowered and any(needle in lowered for needle in (
+        "unexpected response from webpage request",
+        "unable to extract webpage video data",
+        "unable to extract universal data",
+        "unable to extract challenge data",
+        "unable to solve js challenge",
+    )):
+        return (
+            "TikTok liefert gerade keine abrufbaren Videodaten. "
+            "Unter Hilfe -> Nach Aktualisierung suchen pruefen. "
+            "Bei einer aelteren App den aktuellen Installer verwenden."
+        )
+
     patterns = [
         ("is not a valid url", "Das ist kein gueltiger Link."),
         ("unsupported url", "Diese Seite wird nicht unterstuetzt."),
@@ -36,6 +49,7 @@ def humanize(raw_message: str) -> str:
         ("geo restricted", "Das Video ist in deinem Land gesperrt."),
         ("requested format is not available", "Die gewuenschte Qualitaet gibt es bei diesem Video nicht."),
         ("sign in to confirm", "Die Plattform verlangt eine Anmeldung."),
+        ("requiring login", "Die Plattform verlangt fuer dieses Video eine Anmeldung."),
         ("removed by the uploader", "Das Video wurde vom Ersteller geloescht."),
         ("copyright", "Das Video wurde aus Urheberrechtsgruenden entfernt."),
         ("urlopen error", "Keine Verbindung zum Internet."),

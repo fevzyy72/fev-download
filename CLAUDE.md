@@ -140,6 +140,23 @@ Jeder Punkt hier hat echte Zeit gekostet und ist im Code kommentiert.
 
 ### yt-dlp
 
+**TikTok braucht `curl_cffi`, auch bei aktuellem yt-dlp.** Ohne diese native
+Browser-Netzwerkbibliothek antwortete der Beispiel-Link mit nur 537 Bytes und
+`Unexpected response from webpage request`. Der bisherige reine Python-Updater
+kann sie nicht nachliefern. Deshalb `yt-dlp[curl-cffi]` und `curl_cffi` in den
+Abhängigkeiten lassen. `fevdl.spec` sammelt auch `yt_dlp.networking` und das ganze
+curl-Paket samt DLL; der Bau prüft, ob Browser-Ziele verfügbar sind.
+
+**Keine FPS-Angabe bedeutet nicht „kein Video“.** TikTok nennt oft Auflösung und
+Codec, aber keine Bildrate. In `_collect_qualities()` muss eine neue Höhe auch
+mit FPS 0 aufgenommen werden. Sonst schaltet die Oberfläche fälschlich auf
+„Nur Ton“. Abgesichert in `test_tiktok_support.py`; `test_tiktok_download.py`
+prüft mit Netz zusätzlich Vorschau, Clip, Ausschnitt und Tonspur.
+
+**PyPI und yt-dlp schreiben Fassungen unterschiedlich:** `2026.8.19` und
+`2026.08.19` sind dieselbe Fassung. Der Updater vergleicht numerisch und zeigt
+die tatsächlich geladene Fassung, nicht eine erst nach dem Neustart wirksame.
+
 **`ffmpeg_location` allein genügt nicht.** Bei der Prüfung, ob ein Video
 teilweise geladen werden kann, ruft yt-dlp `FFmpegFD.available()` ohne Zugriff
 auf die eigenen Einstellungen auf und sucht nur im `PATH` (im yt-dlp-Quelltext
@@ -203,11 +220,22 @@ nicht — Qt gibt dem Eingabefeld Vorrang. Abgesichert durch
 
 ### Bildformat der Vorschau
 
-Hochformat (TikTok, Reels, Shorts) braucht eine **hohe, schmale** Fläche. Die
-Umschaltung sitzt in `preview_player.py::_apply_stage_width()`. Dabei müssen
-**auch die Dehnungen umgeschaltet werden**: Bleiben sie im Querformat aktiv,
-quetschen sie das Bild auf seine Mindestbreite — das Video wurde dadurch
-schmaler statt breiter.
+Die Bildfläche sitzt in `preview_player.py::_AspectStage`. Sie berechnet aus
+ihrem tatsächlich verfügbaren Platz ein zentriertes Rechteck im Bildformat
+und setzt **Breite und Höhe** ausdrücklich. Nur eine maximale Breite plus
+seitliche Dehnungen reicht nicht: Das ergab bei TikTok eine 87 Pixel breite
+Fläche mit riesigen schwarzen Balken. Bei derselben Fenstergröße passt jetzt
+ein rund 422 × 750 Pixel großes Bild hinein.
+
+Das Videowidget liegt bewusst außerhalb eines größenbestimmenden Layouts.
+Sonst kann seine native Auflösung (1080 × 1920) zur Mindestgröße werden und
+die Bedienelemente aus dem Fenster schieben. `videoSink().videoSizeChanged`
+korrigiert das anfängliche Bildformat anhand der tatsächlich dekodierten
+Vorschau. Lade- und Fehlermeldungen bekommen weiterhin die ganze Fläche.
+
+`test_portrait.py` prüft die **echte Geometrie**, nicht nur eine Breitenbegrenzung:
+Hochformat, Querformat und Quadrat bei vier Fenstergrößen, Dekodierung mit
+abweichenden Metadaten und lesbare Ladezustände. Das ganze Bild bleibt sichtbar.
 
 Die Vorschau hat **bewusst keine Höhenbegrenzung**. Sie ist das, worauf man beim
 Suchen des Ausschnitts schaut, und bekommt allen Platz des Fensters. Wer Höhe
@@ -422,7 +450,7 @@ Resolves Vorschlag kam nie wieder zum Zug. Abgesichert in
 
 ## 6. Tests
 
-`tests/run_tests.ps1` — zwölf Tests ohne Internet, vier weitere mit `-MitNetz`.
+`tests/run_tests.ps1` — 13 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
 
 **Regeln für neue Tests mit Oberfläche:**
 

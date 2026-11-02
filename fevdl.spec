@@ -13,12 +13,17 @@ bin/ und assets/ kommen NICHT hier hinein, sondern legt der Installer neben die
 ffmpeg durch PyInstaller zu schleusen waere nur Umweg und Bauzeit.
 """
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # yt-dlp sucht seine Extraktoren zur Laufzeit ueber importlib zusammen. PyInstaller
 # sieht davon nichts, weil kein import im Quelltext steht - ohne diese Zeile
 # kennt das fertige Programm keine einzige Plattform.
 hidden = collect_submodules("yt_dlp.extractor")
+# Auch die Netzwerk-Handler werden dynamisch eingebunden. curl_cffi braucht
+# ausser seinem Python-Code die native libcurl-DLL und die TLS-Zertifikate.
+hidden += collect_submodules("yt_dlp.networking")
+curl_data, curl_binaries, curl_hidden = collect_all("curl_cffi")
+hidden += curl_hidden + ["_cffi_backend", "certifi"]
 
 # PySide6 bringt weit mehr mit, als hier gebraucht wird. Der Code bindet nur
 # QtCore, QtGui, QtWidgets, QtMultimedia und QtMultimediaWidgets ein - alles
@@ -82,8 +87,8 @@ excluded_other = [
 analysis = Analysis(
     ["launch.pyw"],
     pathex=["src"],
-    binaries=[],
-    datas=[],
+    binaries=curl_binaries,
+    datas=curl_data,
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],

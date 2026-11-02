@@ -85,7 +85,9 @@ def _collect_qualities(formats: list[dict[str, Any]]) -> list[Quality]:
             continue
         height = int(height)
         fps = int(fmt.get("fps") or 0)
-        if fps > best_fps.get(height, 0):
+        # TikTok nennt oft keine Bildrate. Auch ohne FPS ist das ein Video;
+        # vorher fiel 0 > 0 durch und die GUI wechselte faelschlich zu Nur Ton.
+        if height not in best_fps or fps > best_fps[height]:
             best_fps[height] = fps
 
     qualities = [
