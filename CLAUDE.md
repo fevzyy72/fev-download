@@ -13,12 +13,27 @@ gebündelt): erst Abschnitt 0, dann nur die Stelle, die zur Aufgabe passt.
 
 ---
 
-## 0. Aktueller Stand (Stand: 2. Nov. 2026) — zuerst lesen
+## 0. Aktueller Stand (Stand: 3. Nov. 2026) — zuerst lesen
 
-**Veröffentlicht: Fassung 1.1.0**, öffentlich auf GitHub: `fevzyy72/fev-download`
-(Branch `main`, Release `v1.1.0` mit `FevDownloadSetup.exe`). Beim Entwicklungsrechner
-ist sie installiert; `install.json` zeigt auf die installierte `.exe` (nicht auf den
-Quelltext – siehe Abschnitt 3).
+**Fassung 1.2.0** (Redesign „Sammelmappe“, Sicherheitshärtung, neues Symbol, Schleife/Leertaste)
+wird am 3. Nov. 2026 gebaut und auf GitHub veröffentlicht: `fevzyy72/fev-download`
+(Branch `main`, Release `v1.2.0` mit `FevDownloadSetup.exe`). Davor war 1.1.0 draußen.
+Beim Entwicklungsrechner ist 1.1.0 installiert; `install.json` zeigt auf die installierte
+`.exe` (nicht auf den Quelltext – siehe Abschnitt 3). Die Freunde bekommen 1.2.0 per
+Installer-Datei bzw. über die App-Aktualisierung.
+
+**Zusätze am 3. Nov. 2026:**
+- Klick auf einen gemerkten Ausschnitt spielt ihn **in Schleife** (`PreviewPlayer.loop_range`),
+  bis man pausiert (Leertaste) oder selbst springt. Leertaste = Abspielen/Pause am Hauptfenster
+  (`action_play`); nur ein per **Tab** fokussiertes Element behält die Leertaste für sich
+  (`_Interactive.event` / `TrimBar.event` nehmen `ShortcutOverride` an) – nach einem Mausklick
+  gilt sie dem Video.
+- Leerer Zettel auf dem Startbildschirm und der Hinweis „laden gleichzeitig“ sind entfernt –
+  der Besitzer will keine erklärenden Zusatztexte.
+- Programmsymbol: weißes **F, dessen Stamm als Download-Pfeil über einer Ablage endet**
+  (`icons.draw_logo` / `draw_logo_small`, `assets/fevdl.ico` via `tools/make_icon.py`); von Codex entworfen.
+- `design/` steht in `.gitignore` (nur lokal, enthält Beispielpfade).
+- Lizenz-/Quellenprüfung (ffmpeg GPL, Qt, curl) ist **nicht vollständig** – siehe `SICHERHEIT.md`.
 
 **Diese Runde erledigt** (Details je in Abschnitt 5/6):
 - YouTube-Vorschau repariert (`download.PREVIEW_FORMAT`), neueres yt-dlp gewinnt gegen
@@ -29,7 +44,7 @@ Quelltext – siehe Abschnitt 3).
 - `FevDownload.exe --selbsttest` (Abschnitt 5 „Verpacken“), `release.ps1`, `LIZENZEN.txt`.
 - Tests: damals 17 ohne Netz, 6 mit `-MitNetz`, alle grün.
 
-**Redesign „D – Sammelmappe“ umgesetzt (2. Nov. 2026), nicht committet, nicht veröffentlicht.**
+**Redesign „D – Sammelmappe“ umgesetzt (2. Nov. 2026), in 1.2.0 enthalten.**
 Vorlage: `design/looks2/d-sammelmappe/` (vom Besitzer gewählt). Fotos der echten Qt-Oberfläche:
 `design/umsetzung/*.jpg`, neu erzeugen mit `tools/umsetzung_fotos.py` (ohne Netz, BBB-Standbild).
 - Aufbau: schmale Leiste (Logo, „Sammeln“, „Dateien“, Menü ☰ = `Strg+K`; **keine Menüleiste mehr**,

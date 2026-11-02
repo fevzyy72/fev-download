@@ -48,10 +48,10 @@ ICON_PATHS = {
     "open": "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
 }
 
-# Logo "Sammelmappe": abgelegtes Blatt mit Falte und zwei Inhaltslinien (48 x 48).
+# Download-F: Der Stamm endet als Pfeil ueber einer Ablage (48 x 48).
 LOGO_BLUE = "#344fad"
-_LOGO_PAGE = "M8 7h21l11 11v23H8z"
-_LOGO_LINES = "M29 7v11h11M15 26h18M15 33h11"
+_LOGO_F = "M12 6H36V15H21V21H33V27H21V30H27L16.5 39L6 30H12Z"
+_LOGO_TRAY = "M6 42H39V45H6Z"
 
 _TOKEN = re.compile(r"[MmLlHhVvCcQqAaZz]|-?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
 
@@ -202,7 +202,7 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor, stroke:
 
 
 def draw_logo(painter: QPainter, rect: QRectF) -> None:
-    """Das Programmsymbol: blaues Quadrat, weisses Blatt mit Falte."""
+    """Das Programmsymbol: weisses Download-F auf Markenblau."""
     side = min(rect.width(), rect.height())
     painter.save()
     painter.setRenderHint(QPainter.Antialiasing)
@@ -212,22 +212,17 @@ def draw_logo(painter: QPainter, rect: QRectF) -> None:
     painter.fillRect(QRectF(0, 0, 48, 48), blue)
     painter.setPen(Qt.NoPen)
     painter.setBrush(QColor("#ffffff"))
-    painter.drawPath(_parse(_LOGO_PAGE))
-    pen = QPen(blue, 3)
-    pen.setCapStyle(Qt.FlatCap)
-    pen.setJoinStyle(Qt.MiterJoin)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    painter.drawPath(_parse(_LOGO_LINES))
+    painter.drawPath(_parse(_LOGO_F))
+    painter.drawPath(_parse(_LOGO_TRAY))
     painter.restore()
 
 
 def draw_logo_small(painter: QPainter, size: int) -> None:
     """
-    Pixelgenaue Fassung fuer 16 bis 24 Pixel.
+    Pixelgenaue Fassung fuer 16 bis 32 Pixel.
 
-    Herunterskaliert verschwimmen die 3er-Linien der Vorlage zu grauem Brei.
-    Hier liegen Blatt, Falte und Zeilen auf ganzen Pixeln.
+    F-Balken, Pfeilschultern und Ablage liegen auf ganzen Pixeln.
+    Nur die beiden Diagonalen der Pfeilspitze bilden eine Pixeltreppe.
     """
     blue = QColor(LOGO_BLUE)
     white = QColor("#ffffff")
@@ -235,26 +230,28 @@ def draw_logo_small(painter: QPainter, size: int) -> None:
     painter.setRenderHint(QPainter.Antialiasing, False)
     painter.fillRect(0, 0, size, size, blue)
     u = size / 16.0
-    left, top = round(3 * u), round(2 * u)
-    right, bottom = round(13 * u), round(14 * u)
-    fold = max(3, round(3.5 * u))
-    page = QPainterPath()
-    page.moveTo(left, top)
-    page.lineTo(right - fold, top)
-    page.lineTo(right, top + fold)
-    page.lineTo(right, bottom)
-    page.lineTo(left, bottom)
-    page.closeSubpath()
+    # Gemeinsame Kanten einmal runden, damit keine Spalten entstehen.
+    links, stamm, rechts = round(4 * u), round(7 * u), round(12 * u)
+    oben, balken = round(2 * u), round(5 * u)
+    mitte, unten = round(7 * u), round(9 * u)
+    schulter, spitze = round(10 * u), round(13 * u)
+    pfeil_links, pfeil_rechts = round(2 * u), round(9 * u)
+    zeichen = QPainterPath()
+    zeichen.moveTo(links, oben)
+    for x, y in (
+        (rechts, oben), (rechts, balken), (stamm, balken),
+        (stamm, mitte), (round(11 * u), mitte),
+        (round(11 * u), unten), (stamm, unten),
+        (stamm, schulter), (pfeil_rechts, schulter),
+        (round((links + stamm) / 2), spitze),
+        (pfeil_links, schulter), (links, schulter),
+    ):
+        zeichen.lineTo(x, y)
+    zeichen.closeSubpath()
     painter.setPen(Qt.NoPen)
     painter.setBrush(white)
-    painter.drawPath(page)
-    # Falte als ausgesparte Ecke
-    painter.fillRect(right - fold, top, 1, fold, blue)
-    painter.fillRect(right - fold, top + fold - 1, fold, 1, blue)
-    line = max(1, round(u))
-    y1 = round(8.5 * u)
-    y2 = round(11 * u)
-    x0 = round(5 * u)
-    painter.fillRect(x0, y1, round(6 * u), line, blue)
-    painter.fillRect(x0, y2, round(4 * u), line, blue)
+    painter.drawPath(zeichen)
+    ablage = round(14 * u)
+    painter.fillRect(pfeil_links, ablage, round(13 * u) - pfeil_links,
+                     round(15 * u) - ablage, white)
     painter.restore()

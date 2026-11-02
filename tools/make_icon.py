@@ -1,10 +1,10 @@
 """Erzeugt das Programmsymbol assets/fevdl.ico.
 
-Logo "Sammelmappe" (Gestaltung D): blaues Quadrat, darauf ein abgelegtes
-weisses Blatt mit ausgesparter Falte und zwei Inhaltslinien. Gezeichnet wird
+Download-F: blaues Quadrat, darauf ein weisses F, dessen Stamm als Pfeil
+ueber einer Ablage endet. Gezeichnet wird
 mit derselben Funktion wie in der Oberflaeche (src/fevdl/gui/icons.py), damit
-Taskleiste, Fensterkopf und Dialoge dasselbe Zeichen zeigen. Bis 24 Pixel gibt
-es eine pixelgenaue Fassung - herunterskaliert verschwimmen die Linien.
+Taskleiste, Fensterkopf und Dialoge dasselbe Zeichen zeigen. Bis 32 Pixel gibt
+es eine pixelgenaue Fassung fuer scharfe Balken und eine saubere Ablage.
 
 Die .ico-Datei wird von Hand zusammengesetzt, weil sie mehrere Groessen
 enthalten soll und Qt beim Speichern nur eine einzige ablegen wuerde.
@@ -35,7 +35,7 @@ def draw_icon(size: int) -> QImage:
     image = QImage(size, size, QImage.Format_ARGB32)
     image.fill(Qt.transparent)
     painter = QPainter(image)
-    if size <= 24:
+    if size <= 32:
         draw_logo_small(painter, size)
     else:
         draw_logo(painter, QRectF(0, 0, size, size))
