@@ -24,6 +24,8 @@ from . import __version__, paths
 
 # Ein frei lizenzierter Kurzfilm, auf den Verlass ist.
 TEST_URL = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+# Derselbe Link wie in tests/test_tiktok_download.py.
+TIKTOK_URL = "https://www.tiktok.com/@yavereth/video/7688387323892960534"
 REPORT_FILE = paths.IPC_DIR / "selbsttest.txt"
 
 
@@ -76,7 +78,12 @@ def run() -> int:
         targets = ydl._get_available_impersonate_targets()
         ydl.close()
         if targets:
-            report.ok("Browser-Netzwerkbibliothek (TikTok): {} Ziele".format(len(targets)))
+            kinds: dict[str, int] = {}
+            for target, _handler in targets:
+                name = str(target).split(":")[0].split("-")[0]
+                kinds[name] = kinds.get(name, 0) + 1
+            report.ok("Browser-Netzwerkbibliothek (TikTok): {} Ziele ({})".format(
+                len(targets), ", ".join("{} {}".format(k, v) for k, v in sorted(kinds.items()))))
         else:
             report.fail("Browser-Netzwerkbibliothek fehlt - TikTok geht nicht")
     except Exception as exc:
@@ -119,6 +126,19 @@ def run() -> int:
     except Exception as exc:
         report.fail("{}".format(exc))
         report.add(traceback.format_exc())
+
+    # TikTok nur als Hinweis: Ein fremdes Video kann jederzeit verschwinden, das
+    # darf den Selbsttest nicht rot faerben. Fuer die Fehlersuche ist es trotzdem
+    # wertvoll - TikTok geht nur mit der Browser-Netzwerkbibliothek.
+    report.add("")
+    report.add("TikTok  ({})".format(TIKTOK_URL))
+    try:
+        started = time.time()
+        tiktok = probe(TIKTOK_URL)
+        report.ok("Analyse: {:.0f} s, {}p, {} in {:.1f} s".format(
+            tiktok.duration, tiktok.best_height, tiktok.extractor or "?", time.time() - started))
+    except Exception as exc:
+        report.add("  HINWEIS  TikTok-Analyse nicht moeglich: {}".format(str(exc)[:200]))
 
     report.add("")
     report.add("ERGEBNIS: {}".format("alles in Ordnung" if report.failed == 0 else "{} Fehler".format(report.failed)))
