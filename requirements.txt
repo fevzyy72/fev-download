@@ -1,5 +1,6 @@
 # TikTok braucht curl_cffi fuer die Browser-Netzwerkanfragen. Ein blosses
 # yt-dlp-Update liefert diese native Abhaengigkeit nicht nach.
-yt-dlp[curl-cffi]>=2026.8.19
-curl_cffi>=0.14,<0.17
+# Obergrenze: yt-dlp 2026.10.26 erlaubt curl_cffi bis <0.18 und empfiehlt 0.17.
+yt-dlp[curl-cffi]>=2026.10.26
+curl_cffi>=0.16,<0.18
 PySide6>=6.8.0

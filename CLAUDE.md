@@ -85,7 +85,13 @@ $env:PYTHONPATH = "src"
 
 Nach Änderungen an `resolve/FevDownloader.py` muss `install_plugin.ps1` erneut
 laufen **und Resolve neu gestartet werden** — Scripts werden nur beim Start
-eingelesen. Änderungen unter `src/` wirken sofort, da von dort gelesen wird.
+eingelesen. Änderungen unter `src/` wirken sofort, da von dort gelesen wird —
+**aber nur, wenn Resolve auch den Quelltext startet.** `install.json` entscheidet
+das: Zeigt `project_root` auf den Projektordner (so setzt es `install_plugin.ps1`),
+läuft der Quelltext. Spielt man den Installer ein, biegt er den Zeiger auf
+`%LOCALAPPDATA%\Programs\FevDownload` um, und Resolve startet die fertige `.exe` —
+Änderungen in `src/` bleiben dann unsichtbar, bis man `install_plugin.ps1` erneut
+ausführt. Beim Entwickeln zuerst `install.json` prüfen.
 
 ---
 
@@ -146,6 +152,11 @@ Browser-Netzwerkbibliothek antwortete der Beispiel-Link mit nur 537 Bytes und
 kann sie nicht nachliefern. Deshalb `yt-dlp[curl-cffi]` und `curl_cffi` in den
 Abhängigkeiten lassen. `fevdl.spec` sammelt auch `yt_dlp.networking` und das ganze
 curl-Paket samt DLL; der Bau prüft, ob Browser-Ziele verfügbar sind.
+
+Die Obergrenze für `curl_cffi` in `requirements.txt` folgt yt-dlp: Jede yt-dlp-Fassung
+nennt in ihren Metadaten, welche `curl_cffi`-Fassungen sie verträgt (`<0.18` bei
+2026.10.26). Bei einem yt-dlp-Sprung die Grenze mitprüfen, sonst hält sie ein
+altes `curl_cffi` fest — so lag es zeitweise auf 0.14.0, obwohl yt-dlp 0.16 empfahl.
 
 **Keine FPS-Angabe bedeutet nicht „kein Video“.** TikTok nennt oft Auflösung und
 Codec, aber keine Bildrate. In `_collect_qualities()` muss eine neue Höhe auch
@@ -248,6 +259,24 @@ TikTok und andere geben ihre Adressen nur mit besonderen Kopfdaten heraus, die
 `streamFailed`; das Hauptfenster lädt daraufhin über
 `download_preview()` eine kleine Datei und spielt diese ab.
 `_preview_attempted_download` verhindert Endlosschleifen.
+
+**YouTube liefert keine fertigen Dateien mit Bild und Ton mehr.** Gemessen an drei
+Videos, mit alter wie neuer yt-dlp-Fassung: nur getrennte Spuren. Beides ging damit
+verloren — `probe._pick_preview_url()` findet keinen Stream (er verlangt eine
+fertige Datei), und der frühere Formatausdruck der Ausweichdatei scheiterte mit
+„Requested format is not available“. Die Oberfläche zeigte dann „Vorschau nicht
+möglich“. Merken: bei yt-dlp heißt `best` ausdrücklich *eine Datei mit Bild und Ton*,
+nicht „das beste Format“.
+
+`download.PREVIEW_FORMAT` hat deshalb drei Stufen: fertige Datei bis 540p (TikTok &
+Co.), danach getrennte Spuren bis 480p, die ffmpeg zusammensetzt (YouTube), zuletzt
+irgendeine fertige Datei. Gemessen: 10:35 min Big Buck Bunny → 37 MB, rund 4 s.
+Bei sehr langen Videos wächst die Datei entsprechend (~3,5 MB je Minute); das ist
+der Preis dafür, dass YouTube nicht mehr streamen lässt.
+
+Abgesichert zweifach: `test_preview_format.py` (ohne Netz, yt-dlps eigene Auswahl
+über nachgebaute Formatlisten) und `test_preview_fallback.py` / `test_preview.py` (mit
+Netz; Datei muss Bild **und** Ton haben und im Player laufen).
 
 ### PowerShell 5.1
 
@@ -438,6 +467,19 @@ egal über welchen Einstieg.
 Wirksam wird eine neue Fassung deshalb auch erst **beim nächsten Start** — das
 sagt die Meldung im Dialog ausdrücklich.
 
+**Die nachgeladene Fassung gilt nur, wenn sie neuer ist als die mitgelieferte.**
+Der Nachlade-Ordner überlebt den Installer. Früher stand er immer vorn: Wer im
+September ein Update holte und im Oktober einen neueren Installer einspielte, hatte
+weiter die alte Fassung — stillschweigend. Gemessen: 2026.08.19 im Ordner verdeckte
+das mitgelieferte 2026.10.26.
+
+`paths.bundled_ytdlp_version()` erfragt die mitgelieferte Fassung über die
+Paket-Metadaten (`importlib.metadata`), **ohne `yt_dlp` zu importieren** — danach
+ließe sich nichts mehr umentscheiden. Im gepackten Programm gibt es diese Metadaten
+nur, weil `fevdl.spec` sie per `copy_metadata("yt-dlp")` mitnimmt. Fehlen sie, gilt
+der alte Weg (nachgeladen hat Vorrang) — lieber das, als ein Update zu verlieren.
+Getestet in `test_ytdlp_vorrang.py`.
+
 ### Einstellungen
 
 Der Zielordner wird nur dann als eigene Entscheidung gewertet, wenn er wirklich
@@ -450,7 +492,12 @@ Resolves Vorschlag kam nie wieder zum Zug. Abgesichert in
 
 ## 6. Tests
 
-`tests/run_tests.ps1` — 13 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
+`tests/run_tests.ps1` — 15 Testdateien ohne Internet, fünf weitere mit `-MitNetz`.
+
+**Ein Test muss scheitern können.** `test_preview.py` meldete früher „in Ordnung“,
+wenn keine Vorschau vorhanden war, und beendete sich selbst bei „spielt nicht“ mit
+Erfolgscode — so blieb der YouTube-Fehler unbemerkt. Bei neuen Tests mit Netz:
+fehlt das Erwartete, muss der Exit-Code ungleich 0 sein.
 
 **Regeln für neue Tests mit Oberfläche:**
 

@@ -13,7 +13,7 @@ bin/ und assets/ kommen NICHT hier hinein, sondern legt der Installer neben die
 ffmpeg durch PyInstaller zu schleusen waere nur Umweg und Bauzeit.
 """
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 # yt-dlp sucht seine Extraktoren zur Laufzeit ueber importlib zusammen. PyInstaller
 # sieht davon nichts, weil kein import im Quelltext steht - ohne diese Zeile
@@ -24,6 +24,10 @@ hidden = collect_submodules("yt_dlp.extractor")
 hidden += collect_submodules("yt_dlp.networking")
 curl_data, curl_binaries, curl_hidden = collect_all("curl_cffi")
 hidden += curl_hidden + ["_cffi_backend", "certifi"]
+# Die Metadaten (.dist-info) von yt-dlp: Beim Start muss sich die mitgelieferte
+# Fassung erfragen lassen, OHNE das Paket einzubinden (paths.bundled_ytdlp_version),
+# sonst laesst sich nicht entscheiden, ob eine nachgeladene Fassung neuer ist.
+yt_dlp_metadata = copy_metadata("yt-dlp")
 
 # PySide6 bringt weit mehr mit, als hier gebraucht wird. Der Code bindet nur
 # QtCore, QtGui, QtWidgets, QtMultimedia und QtMultimediaWidgets ein - alles
@@ -88,7 +92,7 @@ analysis = Analysis(
     ["launch.pyw"],
     pathex=["src"],
     binaries=curl_binaries,
-    datas=curl_data,
+    datas=curl_data + yt_dlp_metadata,
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],

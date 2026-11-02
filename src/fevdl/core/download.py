@@ -24,6 +24,25 @@ RESOLVE_SAFE_VIDEO_CODECS = ("h264", "avc1", "mpeg4", "prores", "dnxhd")
 
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
+# Formatwahl der Ausweich-Vorschau, in dieser Reihenfolge:
+#
+#   1. Eine fertige Datei mit Bild UND Ton bis 540p - so liefern TikTok und
+#      viele andere Seiten ihre Videos. 'best' meint bei yt-dlp ausdruecklich
+#      eine solche Datei, nicht "das beste Format".
+#   2. Getrennte Bild- und Tonspur bis 480p, die ffmpeg zusammensetzt. YouTube
+#      bietet fertige Dateien mit Ton nicht mehr an (gemessen an drei Videos,
+#      mit alter wie neuer yt-dlp-Fassung); ohne diese Stufe scheiterte die
+#      Vorschau dort mit "Requested format is not available".
+#   3. Zuletzt irgendeine fertige Datei, auch ueber 540p.
+#
+# avc1 + m4a wird bevorzugt, weil das ohne Umcodieren in eine mp4 passt, die der
+# Player zuverlaessig abspielt.
+PREVIEW_FORMAT = (
+    "best[height<=540][ext=mp4]/best[height<=540]"
+    "/bv*[height<=480][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=480]+ba"
+    "/best[ext=mp4]/best"
+)
+
 
 def download(
     request: DownloadRequest,
@@ -80,8 +99,7 @@ def download_preview(
     paths.ensure_dir(target_dir)
 
     options: dict[str, Any] = {
-        # 'best' meint hier ein Format mit Bild UND Ton in einer Datei.
-        "format": "best[height<=540][ext=mp4]/best[height<=540]/best[ext=mp4]/best",
+        "format": PREVIEW_FORMAT,
         "outtmpl": str(target_dir / "vorschau.%(ext)s"),
         "ffmpeg_location": str(paths.BIN_DIR),
         "windowsfilenames": True,

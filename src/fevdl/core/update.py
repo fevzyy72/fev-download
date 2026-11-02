@@ -18,7 +18,6 @@ wuerde in den Installationsordner schreiben wollen.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -79,11 +78,6 @@ def current_version() -> str:
         return "unbekannt"
 
 
-def _version_key(version: str) -> tuple[int, ...]:
-    """PyPI schreibt 2026.8.19, yt-dlp selbst 2026.08.19: dieselbe Fassung."""
-    return tuple(int(part) for part in re.findall(r"\d+", version))
-
-
 def _extract_wheel(wheel: bytes, target: Path) -> None:
     """
     Entpackt das Rad nach target - erst danach wird das Alte ersetzt.
@@ -131,7 +125,7 @@ def update_ytdlp() -> UpdateResult:
     running = current_version()
     newest, wheel_url = latest_version()
 
-    if _version_key(newest) <= _version_key(running):
+    if paths.version_key(newest) <= paths.version_key(running):
         return UpdateResult(
             changed=False,
             version=running,

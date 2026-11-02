@@ -88,9 +88,49 @@ def installed_ytdlp_version() -> str | None:
     return match.group(1) if match else None
 
 
+def version_key(version: str) -> tuple[int, ...]:
+    """
+    Macht aus einer Fassung etwas Vergleichbares.
+
+    PyPI schreibt 2026.8.19, yt-dlp selbst 2026.08.19: dieselbe Fassung. Ein
+    Vergleich als Text wuerde sie unterscheiden, daher Zahl fuer Zahl.
+    """
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def bundled_ytdlp_version() -> str | None:
+    """
+    Fassung des mitgelieferten yt-dlp - ohne es einzubinden.
+
+    Ueber die Paket-Metadaten statt ueber 'import yt_dlp': Sobald das Paket
+    einmal geladen ist, laesst sich die Wahl zwischen mitgeliefert und
+    nachgeladen nicht mehr treffen (siehe activate_ytdlp_update).
+
+    Der Nachlade-Ordner wird bei der Suche ausgelassen. Er enthaelt zwar nur das
+    Paket selbst, aber die Frage lautet ausdruecklich: Was lieferte der
+    Installer mit?
+
+    Rueckgabe: None, wenn sich das nicht ermitteln laesst - etwa in einem
+    gepackten Programm, bei dem die Metadaten beim Bauen nicht mitgenommen
+    wurden (fevdl.spec: copy_metadata).
+    """
+    from importlib.metadata import distributions
+
+    search = [entry for entry in sys.path if entry != str(YTDLP_DIR)]
+    try:
+        for dist in distributions(path=search):
+            name = re.sub(r"[-_.]+", "-", dist.metadata["Name"] or "").lower()
+            if name == "yt-dlp":
+                return dist.version
+    except Exception:
+        return None
+    return None
+
+
 def activate_ytdlp_update() -> str | None:
     """
-    Stellt eine nachgeladene yt-dlp-Fassung vor die mitgelieferte.
+    Stellt eine nachgeladene yt-dlp-Fassung vor die mitgelieferte - aber nur,
+    wenn sie neuer ist.
 
     YouTube aendert regelmaessig etwas an seinen Seiten; yt-dlp zieht meist
     binnen Tagen nach. Die mitgelieferte Fassung ist aber auf dem Stand des
@@ -100,17 +140,30 @@ def activate_ytdlp_update() -> str | None:
     yt-dlp ist reines Python, es genuegt also, den Ordner im Suchpfad VOR das
     mitgelieferte Paket zu stellen.
 
+    Der Vergleich ist noetig, weil der Nachlade-Ordner den Installer ueberlebt:
+    Wer ein Update holt und spaeter einen neueren Installer einspielt, hat sonst
+    eine veraltete nachgeladene Fassung, die die frische mitgelieferte
+    stillschweigend verdeckt.
+
     Muss laufen, BEVOR yt_dlp zum ersten Mal eingebunden wird - danach steht der
     Eintrag in sys.modules und der Suchpfad wird nicht mehr befragt.
 
-    Rueckgabe: die nun geltende Fassung, oder None, wenn die mitgelieferte gilt.
+    Rueckgabe: die nun geltende nachgeladene Fassung, oder None, wenn die
+    mitgelieferte gilt.
     """
-    version = installed_ytdlp_version()
-    if version is None:
-        return None
     entry = str(YTDLP_DIR)
     if entry in sys.path:
         sys.path.remove(entry)
+
+    version = installed_ytdlp_version()
+    if version is None:
+        return None
+
+    bundled = bundled_ytdlp_version()
+    # Gleich neu genuegt: dann ist die mitgelieferte dieselbe Fassung.
+    if bundled is not None and version_key(version) <= version_key(bundled):
+        return None
+
     sys.path.insert(0, entry)
     return version
 

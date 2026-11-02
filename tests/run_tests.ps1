@@ -37,6 +37,8 @@ Write-Host "    OK" -ForegroundColor Green
 # Ohne Netz -------------------------------------------------------------
 $Offline = @(
     @{ Datei = "test_tiktok_support.py"; Was = "TikTok ohne FPS, Fehlermeldungen und Aktualisierungen" },
+    @{ Datei = "test_preview_format.py"; Was = "Vorschau: Formatwahl fuer YouTube, TikTok und andere" },
+    @{ Datei = "test_ytdlp_vorrang.py";  Was = "yt-dlp: die neuere Fassung gewinnt (mitgeliefert/nachgeladen)" },
     @{ Datei = "test_ipc.py";          Was = "Datenaustausch job.json / result.json" },
     @{ Datei = "test_launcher.py";     Was = "Resolve-Script: Installation und Import" },
     @{ Datei = "smoke_gui.py";         Was = "Oberflaeche: Grundfunktionen" },

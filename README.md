@@ -290,9 +290,10 @@ powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File tests\run_tests.ps1 -MitNetz
 ```
 
-13 Testdateien laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
+15 Testdateien laufen ohne Internet und dauern zusammen etwa eine halbe Minute. Sie
 decken Datenaustausch, Oberfläche, das Resolve-Script, Hochformat, mehrere
-Ausschnitte, TikTok-Metadaten ohne FPS und sauberes Beenden ab. Mit `-MitNetz`
+Ausschnitte, TikTok-Metadaten ohne FPS, die Formatwahl der Vorschau, den Vorrang
+von yt-dlp-Fassungen und sauberes Beenden ab. Mit `-MitNetz`
 kommen fünf Testdateien dazu, die wirklich etwas laden. Der TikTok-Test prüft
 Vorschau, ganzen Clip, genauen Ausschnitt und reine Tonspur. Ein eigener Link
 lässt sich mit `python tests/test_tiktok_download.py "<TikTok-Link>"` prüfen.
