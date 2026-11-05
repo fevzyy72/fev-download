@@ -3,4 +3,11 @@
 # Obergrenze: yt-dlp 2026.10.26 erlaubt curl_cffi bis <0.18 und empfiehlt 0.17.
 yt-dlp[curl-cffi]>=2026.10.26
 curl_cffi>=0.16,<0.18
+# YouTube: JavaScript-Laufzeit + Loesungsskripte (siehe core/ytdlp_options.py).
+# Ohne sie fragt yt-dlp nur ueber einen Zugang an; sperrt YouTube den, geht nichts.
+# yt-dlp-ejs muss zur yt-dlp-Fassung passen: dort im Extra "default" nachsehen
+# (2026.10.26 -> yt-dlp-ejs==0.8.0, deno>=2.9.8). Das pip-Paket 'deno' legt
+# deno.exe nach .venv\Scripts; build_installer.ps1 kopiert sie nach bin\.
+yt-dlp-ejs==0.8.0
+deno>=2.9.8
 PySide6>=6.8.0

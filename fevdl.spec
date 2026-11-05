@@ -13,7 +13,7 @@ bin/ und assets/ kommen NICHT hier hinein, sondern legt der Installer neben die
 ffmpeg durch PyInstaller zu schleusen waere nur Umweg und Bauzeit.
 """
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules, copy_metadata
 
 # yt-dlp sucht seine Extraktoren zur Laufzeit ueber importlib zusammen. PyInstaller
 # sieht davon nichts, weil kein import im Quelltext steht - ohne diese Zeile
@@ -28,6 +28,13 @@ hidden += curl_hidden + ["_cffi_backend", "certifi"]
 # Fassung erfragen lassen, OHNE das Paket einzubinden (paths.bundled_ytdlp_version),
 # sonst laesst sich nicht entscheiden, ob eine nachgeladene Fassung neuer ist.
 yt_dlp_metadata = copy_metadata("yt-dlp")
+# Loesungsskripte fuer YouTubes JavaScript-Aufgaben (core/ytdlp_options.py).
+# yt-dlp bindet das Paket nur versuchsweise ein und liest die .js-Dateien ueber
+# importlib.resources - beides sieht PyInstaller nicht sicher. Fehlen sie,
+# meldet yt-dlp nur eine Warnung; der Selbsttest faengt das ab.
+# deno.exe selbst kommt wie ffmpeg nach bin\ (build_installer.ps1).
+hidden += ["yt_dlp_ejs", "yt_dlp_ejs.yt.solver"]
+ejs_data = collect_data_files("yt_dlp_ejs", includes=["**/*.js"])
 
 # PySide6 bringt weit mehr mit, als hier gebraucht wird. Der Code bindet nur
 # QtCore, QtGui, QtWidgets, QtMultimedia und QtMultimediaWidgets ein - alles
@@ -92,7 +99,7 @@ analysis = Analysis(
     ["launch.pyw"],
     pathex=["src"],
     binaries=curl_binaries,
-    datas=curl_data + yt_dlp_metadata,
+    datas=curl_data + yt_dlp_metadata + ejs_data,
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],

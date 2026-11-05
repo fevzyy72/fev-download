@@ -16,6 +16,7 @@ from .. import paths
 from .errors import CancelledError, DownloadError, humanize
 from .models import DownloadRequest, Mode, Progress
 from .urls import web_url
+from .ytdlp_options import shared_options
 
 ProgressCallback = Callable[[Progress], None]
 CancelCheck = Callable[[], bool]
@@ -104,6 +105,7 @@ def download_preview(
     paths.ensure_dir(target_dir)
 
     options: dict[str, Any] = {
+        **shared_options(),
         "format": PREVIEW_FORMAT,
         "outtmpl": str(target_dir / "vorschau.%(ext)s"),
         "ffmpeg_location": str(paths.BIN_DIR),
@@ -235,6 +237,7 @@ def _build_options(
     should_cancel: Optional[CancelCheck],
 ) -> dict[str, Any]:
     options: dict[str, Any] = {
+        **shared_options(),
         "format": _format_selector(request),
         "outtmpl": str(request.output_dir / _output_template(request)),
         "ffmpeg_location": str(paths.BIN_DIR),

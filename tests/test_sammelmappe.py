@@ -75,6 +75,12 @@ QTest.qWait(150)
 
 # -- 2. Tastatur -------------------------------------------------------------
 
+# Pfeiltasten wandern bei Qt ueber QApplication.focusWidget() - das gibt es nur
+# im aktiven Fenster. Ohne Aktivierung schlug der Test sporadisch fehl, wenn ein
+# anderes Fenster vorn lag (etwa beim Bau im Hintergrund, Nov. 2026).
+window.activateWindow()
+window.raise_()
+QTest.qWaitForWindowActive(window, 3000)
 cards = window.mode_combo.buttons()
 cards[0].setFocus(Qt.TabFocusReason)
 QTest.keyClick(cards[0], Qt.Key_Right)

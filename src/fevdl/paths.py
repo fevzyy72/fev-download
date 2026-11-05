@@ -28,6 +28,11 @@ BIN_DIR = PROJECT_ROOT / "bin"
 FFMPEG_EXE = BIN_DIR / "ffmpeg.exe"
 FFPROBE_EXE = BIN_DIR / "ffprobe.exe"
 
+# JavaScript-Laufzeit fuer YouTube (siehe core/ytdlp_options.py). Im Quelltext
+# bringt sie das pip-Paket 'deno' nach .venv\Scripts, im Installer liegt sie
+# neben ffmpeg in bin\ (build_installer.ps1 kopiert sie dorthin).
+DENO_EXE = (BIN_DIR if IS_FROZEN else PROJECT_ROOT / ".venv" / "Scripts") / "deno.exe"
+
 ASSETS_DIR = PROJECT_ROOT / "assets"
 ICON_FILE = ASSETS_DIR / "fevdl.ico"
 

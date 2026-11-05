@@ -10,6 +10,7 @@ from yt_dlp.utils import DownloadError as YtDlpDownloadError
 from .errors import ProbeError, humanize
 from .models import Quality, VideoInfo
 from .urls import web_url
+from .ytdlp_options import shared_options
 
 # Fuer die Vorschau reicht wenig Aufloesung - Hauptsache sofort abspielbar.
 PREVIEW_MAX_HEIGHT = 480
@@ -17,6 +18,7 @@ PREVIEW_MAX_HEIGHT = 480
 
 def _base_options() -> dict[str, Any]:
     return {
+        **shared_options(),
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,

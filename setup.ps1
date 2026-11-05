@@ -151,6 +151,15 @@ Write-Ok $ffmpegVersion
 $ytdlpVersion = & $VenvPython -m yt_dlp --version
 Write-Ok "yt-dlp $ytdlpVersion"
 
+# Kommt ueber das pip-Paket 'deno' (requirements.txt). Ohne sie fragt yt-dlp
+# YouTube nur ueber einen Zugang an - siehe src\fevdl\core\ytdlp_options.py.
+$DenoExe = Join-Path $VenvDir "Scripts\deno.exe"
+if (Test-Path $DenoExe) {
+    Write-Ok ((& $DenoExe --version | Select-Object -First 1) + " (JavaScript-Laufzeit fuer YouTube)")
+} else {
+    Write-Host "    deno.exe fehlt - YouTube laeuft nur eingeschraenkt." -ForegroundColor Yellow
+}
+
 & $VenvPython -c "import PySide6; print('PySide6', PySide6.__version__)"
 
 Write-Host ""

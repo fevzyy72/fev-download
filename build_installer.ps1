@@ -89,6 +89,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Ok "Browser-Netzwerkbibliothek fuer TikTok vorhanden."
 
+# Ohne JavaScript-Laufzeit fragt yt-dlp YouTube nur ueber einen Zugang an; sperrt
+# YouTube den ("not a bot"), geht nichts mehr. Siehe src\fevdl\core\ytdlp_options.py.
+$DenoExe = Join-Path $ProjectRoot ".venv\Scripts\deno.exe"
+& $VenvPython -c "import yt_dlp_ejs"
+if (-not (Test-Path -LiteralPath $DenoExe) -or $LASTEXITCODE -ne 0) {
+    Write-Host "Deno oder yt-dlp-ejs fehlt. Nachholen mit:" -ForegroundColor Red
+    Write-Host "  .venv\Scripts\python.exe -m pip install -r requirements.txt" -ForegroundColor Red
+    exit 1
+}
+Write-Ok ("JavaScript-Laufzeit fuer YouTube vorhanden: " + (& $DenoExe --version | Select-Object -First 1))
+
 # Inno Setup wird sowohl fuer den Benutzer als auch systemweit installiert -
 # beide Orte pruefen.
 $IsccCandidates = @(
@@ -196,6 +207,8 @@ New-Item -ItemType Directory -Path $PackedBin -Force | Out-Null
 foreach ($Binary in @("ffmpeg.exe", "ffprobe.exe")) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "bin\$Binary") -Destination $PackedBin -Force
 }
+# deno.exe stammt aus dem pip-Paket 'deno' (von Deno Land Inc. signiert).
+Copy-Item -LiteralPath $DenoExe -Destination $PackedBin -Force
 foreach ($LegalPart in @("licenses", "HERKUNFT.txt")) {
     $LegalSource = Join-Path $ProjectRoot "bin\$LegalPart"
     if (Test-Path -LiteralPath $LegalSource) {
@@ -217,7 +230,8 @@ target = pathlib.Path(sys.argv[1]) / "licenses"
 target.mkdir(exist_ok=True)
 versions = {"Python": sys.version.split()[0]}
 for name in ("yt-dlp", "PySide6", "PySide6-Essentials", "PySide6-Addons",
-             "shiboken6", "curl_cffi", "cffi", "certifi", "pycparser", "pyinstaller"):
+             "shiboken6", "curl_cffi", "cffi", "certifi", "pycparser", "pyinstaller",
+             "deno", "yt-dlp-ejs"):
     dist = md.distribution(name)
     versions[name] = dist.version
     found = []

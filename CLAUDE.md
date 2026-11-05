@@ -22,6 +22,21 @@ Beim Entwicklungsrechner ist 1.1.0 installiert; `install.json` zeigt auf die ins
 `.exe` (nicht auf den Quelltext – siehe Abschnitt 3). Die Freunde bekommen 1.2.0 per
 Installer-Datei bzw. über die App-Aktualisierung.
 
+**6. Nov. 2026 – YouTube-Bot-Sperre beim Freund, Fassung 1.2.1 (gebaut, nicht veröffentlicht):**
+- Ein Freund bekam bei jedem Link „Die Plattform verlangt eine Anmeldung.“ Roh: *Sign in to confirm
+  you're not a bot*. Beim Besitzer lief derselbe Link. Ursache: Ohne JavaScript-Laufzeit fragt yt-dlp
+  YouTube nur über **einen** Zugang an (`visionos`); traut YouTube dem Anschluss nicht, gibt es keinen
+  Ausweg. Jetzt liefert die App **Deno** mit (`bin\deno.exe`, pip-Paket `deno`, signiert) und
+  **yt-dlp-ejs** (Lösungsskripte) → Zugänge `tv_samsung` + `visionos` (+ `web`). Details Abschnitt 5
+  „JavaScript-Laufzeit“. Installer +~40 MB.
+- **Ob das beim Freund reicht, ist nicht belegt** – die Sperre ließ sich hier nicht nachstellen. Bei
+  gesperrter Verbindung scheitern manchmal alle Zugänge; dann helfen nur VPN aus / neue IP (Router) /
+  warten oder Browser-Cookies. Cookies liest yt-dlp unter Windows nur aus **Firefox** (getestet: Chrome
+  „Could not copy cookie database“, Edge „Failed to decrypt with DPAPI“). Eine Firefox-Option ist
+  **nicht** gebaut – erst nach Rückfrage beim Besitzer.
+- Die Meldung sagt jetzt ehrlich „YouTube hält diese Internetverbindung gerade für einen Bot …“.
+- Der Besitzer hat noch **zwei Wünsche** angekündigt, aber noch nicht genannt.
+
 **Zusätze am 3. Nov. 2026:**
 - Klick auf einen gemerkten Ausschnitt spielt ihn **in Schleife** (`PreviewPlayer.loop_range`),
   bis man pausiert (Leertaste) oder selbst springt. Leertaste = Abspielen/Pause am Hauptfenster
@@ -220,6 +235,7 @@ davinciplugin/
     │   ├── models.py         Mode, Quality, VideoInfo, DownloadRequest, Progress
     │   ├── probe.py          Metadaten, Qualitäten, Vorschau- und Tonspuradresse
     │   ├── download.py       Download, Ausschnitt, H.264-Umwandlung, Vorschaudatei
+    │   ├── ytdlp_options.py  Gemeinsame yt-dlp-Optionen (Deno-Pfad für YouTube)
     │   ├── waveform.py       Lautstärkeverlauf über ffmpeg
     │   ├── thumbs.py         Standbilder der Bibliothek, mit Zwischenspeicher
     │   ├── update.py         Holt neueres yt-dlp von PyPI nach (auch still beim Start)
@@ -263,6 +279,26 @@ Codec, aber keine Bildrate. In `_collect_qualities()` muss eine neue Höhe auch
 mit FPS 0 aufgenommen werden. Sonst schaltet die Oberfläche fälschlich auf
 „Nur Ton“. Abgesichert in `test_tiktok_support.py`; `test_tiktok_download.py`
 prüft mit Netz zusätzlich Vorschau, Clip, Ausschnitt und Tonspur.
+
+**JavaScript-Laufzeit (Deno) ist Pflicht für YouTube.** yt-dlp wählt die YouTube-Zugänge
+danach, ob eine JS-Laufzeit da ist (`_DEFAULT_JSLESS_CLIENTS = ('visionos',)` gegen
+`_DEFAULT_CLIENTS = ('tv_samsung', 'visionos', 'web')` in `extractor/youtube/_video.py`). Ohne
+Laufzeit bleibt ein einziger Zugang, und den sperrt YouTube bei verdächtigen Anschlüssen mit
+„Sign in to confirm you're not a bot“ – so beim Freund im Nov. 2026. `core/ytdlp_options.py::shared_options()`
+gibt deshalb **jedem** yt-dlp-Aufruf (Analyse, Vorschau, Download) den Deno-Pfad mit; neue Aufrufe
+müssen das auch tun (`test_js_runtime.py` prüft die drei bekannten). Gefunden würde Deno sonst nur
+über den PATH, und `bin\` steht dort erst nach dem ersten Download.
+- Herkunft: pip-Paket `deno` → `.venv\Scripts\deno.exe` (98 MB, von Deno Land Inc. signiert);
+  `build_installer.ps1` kopiert es nach `bin\`. `paths.DENO_EXE` kennt beide Orte.
+- Die Lösungsskripte kommen aus `yt-dlp-ejs`, dessen Fassung (Major.Minor) zu yt-dlp passen muss –
+  bei einem yt-dlp-Sprung `requirements.txt` nachziehen (steht im Extra `default` von yt-dlp);
+  `test_js_runtime.py` prüft Fassung und Prüfsummen genau wie yt-dlp selbst.
+- Holt die stille Aktualisierung ein yt-dlp, das neuere Skripte will, greift `remote_components:
+  ["ejs:github"]`: yt-dlp lädt sie von GitHub, nur gegen die in yt-dlp hinterlegte Prüfsumme.
+- Deno läuft dabei ohne Datei- und Netzrechte (`--no-remote --no-npm`, kein `--allow-*`); getestet.
+- Fehlen die Skripte im Paket, meldet yt-dlp nur eine Warnung und fällt still auf den einen Zugang
+  zurück. Darum prüft der Selbsttest, ob „Solving JS challenges using deno“ im Protokoll steht.
+- Gemessen: Analyse mit Deno 2,4–2,7 s (wie ohne), 61 statt weniger Formate bis 2160p.
 
 **PyPI und yt-dlp schreiben Fassungen unterschiedlich:** `2026.8.19` und
 `2026.08.19` sind dieselbe Fassung. Der Updater vergleicht numerisch und zeigt
@@ -657,7 +693,8 @@ Resolves Vorschlag kam nie wieder zum Zug. Abgesichert in
 
 ## 6. Tests
 
-`tests/run_tests.ps1` — 17 Testdateien ohne Internet, sechs weitere mit `-MitNetz`.
+`tests/run_tests.ps1` — 21 Testdateien ohne Internet, sechs weitere mit `-MitNetz`
+(Stand 6. Nov. 2026: alle 27 grün).
 
 **Ein Test muss scheitern können.** `test_preview.py` meldete früher „in Ordnung“,
 wenn keine Vorschau vorhanden war, und beendete sich selbst bei „spielt nicht“ mit

@@ -45,6 +45,19 @@ yt-dlp
 ------
 Lizenz: The Unlicense (gemeinfrei).  https://github.com/yt-dlp/yt-dlp
 
+yt-dlp-ejs
+----------
+Fassung 0.8.0, The Unlicense (gemeinfrei). Loesungsskripte fuer YouTube.
+Originaltext unter licenses\yt-dlp-ejs.  https://github.com/yt-dlp/ejs
+
+Deno  (bin\deno.exe)
+--------------------
+Fassung 2.9.8, MIT, Copyright Deno Land Inc.; Originaltext unter licenses\deno.
+Unveraendert aus dem PyPI-Paket 'deno' (von Deno Land Inc. signiert), laeuft als
+eigener Prozess. deno.exe enthaelt ausserdem V8 (BSD) und weitere Rust-
+Bibliotheken mit eigenen Lizenzen; deren vollstaendiger Abgleich ist offen.
+  https://github.com/denoland/deno/tree/v2.9.8
+
 Qt / PySide6
 ------------
 Fassung 6.12.0. PySide6/Shiboken6 und viele Qt-Module bieten LGPLv3/GPL bzw.

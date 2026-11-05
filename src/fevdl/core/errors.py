@@ -48,6 +48,13 @@ def humanize(raw_message: str) -> str:
         ("not available in your country", "Das Video ist in deinem Land gesperrt."),
         ("geo restricted", "Das Video ist in deinem Land gesperrt."),
         ("requested format is not available", "Die gewuenschte Qualitaet gibt es bei diesem Video nicht."),
+        # Keine echte Anmeldepflicht: YouTube traut der Internetverbindung gerade
+        # nicht (meist VPN, geteilter Anschluss oder viele Abrufe). Das liegt am
+        # Anschluss, nicht am Video - darum der Hinweis, was dagegen hilft.
+        ("not a bot", (
+            "YouTube haelt diese Internetverbindung gerade fuer einen Bot. "
+            "Meist hilft: VPN ausschalten, Router neu starten oder spaeter erneut versuchen."
+        )),
         ("sign in to confirm", "Die Plattform verlangt eine Anmeldung."),
         ("requiring login", "Die Plattform verlangt fuer dieses Video eine Anmeldung."),
         ("removed by the uploader", "Das Video wurde vom Ersteller geloescht."),

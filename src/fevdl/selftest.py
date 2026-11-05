@@ -91,6 +91,8 @@ def run() -> int:
         report.save()
         return 1
 
+    _check_js_runtime(report, YoutubeDL)
+
     # --- Strecke ----------------------------------------------------------
     from .core.download import download, download_preview, probe_duration
     from .core.models import DownloadRequest, Mode
@@ -144,6 +146,62 @@ def run() -> int:
     report.add("ERGEBNIS: {}".format("alles in Ordnung" if report.failed == 0 else "{} Fehler".format(report.failed)))
     report.save()
     return 0 if report.failed == 0 else 1
+
+
+class _Log:
+    """Sammelt, was yt-dlp still protokolliert."""
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+
+    def debug(self, message: str) -> None:
+        self.lines.append(message)
+
+    info = debug
+
+    def warning(self, message: str) -> None:
+        self.lines.append("WARNING: " + message)
+
+    error = warning
+
+
+def _check_js_runtime(report: _Report, youtube_dl: type) -> None:
+    """
+    Arbeitet Deno wirklich mit? Dass deno.exe daneben liegt, genuegt nicht:
+    Fehlen im Paket die Loesungsskripte (yt-dlp-ejs), meldet yt-dlp nur eine
+    Warnung und faellt still auf den einen Zugang ohne JavaScript zurueck - genau
+    der, den YouTube bei verdaechtigen Verbindungen sperrt (core/ytdlp_options.py).
+    """
+    from .core.ytdlp_options import shared_options
+
+    if not paths.DENO_EXE.is_file():
+        report.fail("JavaScript-Laufzeit fehlt: {}".format(paths.DENO_EXE))
+        return
+    try:
+        import yt_dlp_ejs
+
+        report.add("  Loesungsskripte: yt-dlp-ejs {}".format(yt_dlp_ejs.version))
+    except Exception:
+        report.add("  Loesungsskripte: nicht mitgeliefert")
+
+    log = _Log()
+    try:
+        started = time.time()
+        with youtube_dl({**shared_options(), "quiet": True, "skip_download": True, "logger": log}) as ydl:
+            ydl.extract_info(TEST_URL, download=False)
+        solved = any("Solving JS challenges using deno" in line for line in log.lines)
+        problems = [line for line in log.lines
+                    if line.startswith("WARNING") and ("jsc" in line or "challenge" in line.lower())]
+        clients = [line.split(": Downloading ", 1)[1].replace(" player API JSON", "")
+                   for line in log.lines if "player API JSON" in line]
+        if solved and not problems:
+            report.ok("JavaScript-Laufzeit (YouTube): Zugaenge {} in {:.1f} s".format(
+                ", ".join(clients) or "?", time.time() - started))
+        else:
+            report.fail("JavaScript-Laufzeit arbeitet nicht mit: {}".format(
+                (problems or ["keine Loesung gemeldet"])[0][:200]))
+    except Exception as exc:
+        report.fail("YouTube-Analyse mit JavaScript-Laufzeit: {}".format(str(exc)[:200]))
 
 
 if __name__ == "__main__":
