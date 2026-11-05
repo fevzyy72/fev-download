@@ -22,7 +22,10 @@ Beim Entwicklungsrechner ist 1.1.0 installiert; `install.json` zeigt auf die ins
 `.exe` (nicht auf den Quelltext – siehe Abschnitt 3). Die Freunde bekommen 1.2.0 per
 Installer-Datei bzw. über die App-Aktualisierung.
 
-**6. Nov. 2026 – YouTube-Bot-Sperre beim Freund, Fassung 1.2.1 (gebaut, nicht veröffentlicht):**
+**6. Nov. 2026 – YouTube-Bot-Sperre beim Freund, Fassung 1.2.1 (veröffentlicht, Release `v1.2.1`, 140 MB):**
+- Veröffentlicht mit dem schon geprüften Installer (Selbsttest bestanden, Hash geprüft) per Hand
+  (`git push` + `gh release create`), weil `release.ps1 -OhneBau` den Bau-Nachweis an den Commit
+  bindet und vor dem Commit gebaut worden war. Ob es beim Freund wirkt, steht noch aus.
 - Ein Freund bekam bei jedem Link „Die Plattform verlangt eine Anmeldung.“ Roh: *Sign in to confirm
   you're not a bot*. Beim Besitzer lief derselbe Link. Ursache: Ohne JavaScript-Laufzeit fragt yt-dlp
   YouTube nur über **einen** Zugang an (`visionos`); traut YouTube dem Anschluss nicht, gibt es keinen
